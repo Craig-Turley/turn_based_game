@@ -10,17 +10,22 @@ import (
 
 type OnPeer func(client *Client) error
 
+func emptyOnPeer(client *Client) error {
+	return nil
+}
+
 type TCPTransport struct {
 	addr     string
 	ln       net.Listener
 	onPeer   OnPeer
-	packetch chan Packet
+	packetch chan *Packet
 }
 
 func NewTCPTransport(addr string) *TCPTransport {
 	return &TCPTransport{
 		addr:     addr,
-		packetch: make(chan Packet),
+		packetch: make(chan *Packet),
+		onPeer:   emptyOnPeer,
 	}
 }
 
@@ -41,7 +46,19 @@ func getPacketLength(data []byte) uint16 {
 	return binary.BigEndian.Uint16(data[HEADER_LENGTH_OFFSET:])
 }
 
-func (p *PacketFramer) push(data []byte, out chan Packet) error {
+func FrameWithReader(framer *PacketFramer, reader io.Reader) error {
+	data := make([]byte, 100, 100)
+	for {
+		n, err := reader.Read(data)
+		if err != nil {
+			return err
+		}
+
+		framer.push(data[:n])
+	}
+}
+
+func (p *PacketFramer) push(data []byte) error {
 	n := copy(p.buf[p.idx:], data)
 
 	if n < len(data) {
@@ -56,7 +73,7 @@ func (p *PacketFramer) push(data []byte, out chan Packet) error {
 			return err
 		}
 
-		out <- *packet
+		p.C <- packet
 	}
 }
 
@@ -123,8 +140,16 @@ func (t *TCPTransport) Accept() {
 
 func (t *TCPTransport) Read(client *Client) {
 	defer func() {
-		log.Println("Dropping connection...")
 		client.conn.Close()
+	}()
+
+	go func() {
+		for {
+			select {
+			case packet := <-client.framer.C:
+				t.packetch <- packet
+			}
+		}
 	}()
 
 	for {
@@ -139,11 +164,11 @@ func (t *TCPTransport) Read(client *Client) {
 			continue
 		}
 
-		client.framer.push(buf[:n], t.packetch)
+		client.framer.push(buf[:n])
 	}
 }
 
-func (t *TCPTransport) Consume() <-chan Packet {
+func (t *TCPTransport) Consume() <-chan *Packet {
 	return t.packetch
 }
 

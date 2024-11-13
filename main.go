@@ -6,17 +6,12 @@ import (
 	"sync"
 )
 
-type Server interface {
-	Start() error
-	Read()
-	Close()
-}
-
-type DecodeFunc func(from net.Addr, data []byte, len int) (Packet, error)
+type HandlerFunc func(p *Packet) error
 
 type TCPServer struct {
 	transport Transport
 	quitch    chan struct{}
+	handlers  map[PacketType]HandlerFunc
 
 	mu      sync.Mutex
 	clients map[net.Addr]*Client
@@ -27,6 +22,7 @@ func NewTCPServer(addr string) *TCPServer {
 	server := &TCPServer{
 		transport: transport,
 		quitch:    make(chan struct{}),
+		handlers:  make(map[PacketType]HandlerFunc),
 
 		mu:      sync.Mutex{},
 		clients: make(map[net.Addr]*Client),
@@ -42,12 +38,29 @@ func (s *TCPServer) Start() error {
 		return err
 	}
 
-	go s.Read()
+	s.registerHandlers()
+
+	go s.read()
 
 	return nil
 }
 
-func (s *TCPServer) Read() {
+func (s *TCPServer) registerHandlers() {
+	s.handlers[PacketTypeUnused1] = PacketTypeUnused1Handler
+	s.handlers[PacketTypeUnused2] = PacketTypeUnused2Handler
+}
+
+func PacketTypeUnused1Handler(p *Packet) error {
+	log.Println("PacketType1 being handled here")
+	return nil
+}
+
+func PacketTypeUnused2Handler(p *Packet) error {
+	log.Println("PacketType2 being handled here")
+	return nil
+}
+
+func (s *TCPServer) read() {
 	defer func() {
 		log.Println("Server closing...")
 		s.transport.Close()
@@ -58,10 +71,23 @@ func (s *TCPServer) Read() {
 		case p := <-s.transport.Consume():
 			log.Printf("%v\n", p.data)
 
+			go s.handleMessage(p)
+
 		case <-s.quitch:
 			return
 		}
 	}
+}
+
+func (s *TCPServer) handleMessage(p *Packet) {
+	msgType := p.Type()
+	handlerFunc, ok := s.handlers[msgType]
+	if !ok {
+		log.Printf("Handler Func not registered for Packet Type %d", msgType)
+		return
+	}
+
+	handlerFunc(p)
 }
 
 func (s *TCPServer) OnPeer(client *Client) error {
