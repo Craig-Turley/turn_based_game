@@ -17,6 +17,7 @@ const (
 var (
 	ERROR_VERSION_MISMATCH       = errors.New("Version mismatch error")
 	ERROR_PACKET_LENGTH_MISMATCH = errors.New("Packet length mismatch error")
+	ERROR_CLIENT_ID_GENERATION   = errors.New("Error generating random ID for client")
 )
 
 // Client is for a connected client
@@ -32,6 +33,10 @@ func NewClient(conn net.Conn) *Client {
 	return &Client{
 		conn: conn,
 	}
+}
+
+func (c *Client) Write(data []byte) (int, error) {
+	return c.conn.Write(data)
 }
 
 // Packet is the way of interpreting data from our
@@ -61,6 +66,10 @@ func (p *Packet) Encoding() Encoding {
 // of packet data
 func (p *Packet) Type() PacketType {
 	return PacketType(p.data[ENC_TYPE_OFFSET] & 0x3F)
+}
+
+func (p *Packet) Data() []byte {
+	return p.data[PACKET_HEADER_SIZE:]
 }
 
 // Transport is responsible for sending and recieving data

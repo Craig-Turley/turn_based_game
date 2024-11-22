@@ -2,39 +2,12 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"testing"
 )
 
-var tests = []struct {
-	data []byte
-	len  int
-}{
-	{
-		data: newEncodedString("Hello, TCP Server!"),
-		len:  17,
-	},
-	{
-		data: newEncodedString("Another test case"),
-		len:  17,
-	},
-	{
-		data: newEncodedString(""),
-		len:  0,
-	},
-	{
-		data: newEncodedString("Short"),
-		len:  5,
-	},
-	{
-		data: newEncodedString("A much longer test case to check buffer handling and server response for larger payloads."),
-		len:  79,
-	},
-}
-
 func TestFramer(t *testing.T) {
 	framer := NewPacketFramer()
-	for i, p := range tests {
+	for i, p := range encStringTests {
 		framer.push(p.data)
 		res := <-framer.C
 		if !bytes.Equal(res.data, p.data) {
@@ -43,23 +16,19 @@ func TestFramer(t *testing.T) {
 	}
 }
 
-// helper functions to send data in correct encoding
+func TestPacketFunctions(t *testing.T) {
+	for i, p := range encStringTests {
+		packet := NewPacket(p.data)
+		if packet.Encoding() != EncString {
+			t.Errorf("Enc mismatch on idx %d. Got %s want %s", i, EncToString(packet.Encoding()), EncToString(EncString))
+		}
 
-func bitPack(enc Encoding, packetType PacketType) uint8 {
-	return uint8((enc&0x3)<<6) | uint8(packetType&0x3F)
-}
+		if packet.Type() != PacketTypeUnused1 {
+			t.Errorf("Type mismatch on idx %d. Got %s want %s", i, TypeToString(packet.Type()), TypeToString(PacketTypeUnused1))
+		}
 
-func newEncodedString(message string) []byte {
-	buf := new(bytes.Buffer)
-	version := VERSION
-	encType := bitPack(EncString, PacketTypeUnused1)
-	length := uint16(len(message))
-
-	binary.Write(buf, binary.BigEndian, version)
-	binary.Write(buf, binary.BigEndian, encType)
-	binary.Write(buf, binary.BigEndian, length)
-
-	buf.Write([]byte(message))
-
-	return buf.Bytes()
+		if !bytes.Equal(packet.Data(), p.data[PACKET_HEADER_SIZE:]) {
+			t.Errorf("Data mismatch on idx %d", i)
+		}
+	}
 }

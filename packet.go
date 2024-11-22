@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -21,17 +22,9 @@ type PacketType uint8
 const (
 	PacketTypeUnused1 PacketType = iota
 	PacketTypeUnused2
+	PacketCreateGame
+	PacketGameCreated // outbound
 )
-
-func TypeToString(t PacketType) string {
-	switch t {
-	case PacketTypeUnused1:
-		return "PacketTypeUnused1"
-	case PacketTypeUnused2:
-		return "PacketTypeUnused2"
-	}
-	return ""
-}
 
 type PacketFramer struct {
 	buf []byte
@@ -44,10 +37,6 @@ func NewPacketFramer() *PacketFramer {
 		buf: make([]byte, PACKET_MAX_SIZE, PACKET_MAX_SIZE),
 		C:   make(chan *Packet, 10),
 	}
-}
-
-func getPacketLength(data []byte) uint16 {
-	return binary.BigEndian.Uint16(data[HEADER_LENGTH_OFFSET:])
 }
 
 func FrameWithReader(framer *PacketFramer, reader io.Reader) error {
@@ -90,7 +79,6 @@ func (p *PacketFramer) pull() (*Packet, error) {
 		return nil, ERROR_VERSION_MISMATCH
 	}
 
-	// check the friggin encoding and type at some point
 	pktLen := getPacketLength(p.buf)
 	fullLen := pktLen + PACKET_HEADER_SIZE
 	if fullLen >= PACKET_MAX_SIZE {
@@ -98,7 +86,6 @@ func (p *PacketFramer) pull() (*Packet, error) {
 	}
 
 	if fullLen <= uint16(p.idx) {
-		// start the fuggin process of making da packet
 		out := make([]byte, fullLen, fullLen)
 		copy(out, p.buf[:fullLen])
 		copy(p.buf, p.buf[fullLen:])
@@ -109,4 +96,45 @@ func (p *PacketFramer) pull() (*Packet, error) {
 	}
 
 	return nil, nil
+}
+
+func TypeToString(t PacketType) string {
+	switch t {
+	case PacketTypeUnused1:
+		return "PacketTypeUnused1"
+	case PacketTypeUnused2:
+		return "PacketTypeUnused2"
+	}
+	return ""
+}
+
+func EncToString(e Encoding) string {
+	switch e {
+	case EncCustom:
+		return "EncCustom"
+	case EncJSON:
+		return "EncJSON"
+	case EncString:
+		return "EncString"
+	case EncUnused2:
+		return "EncUnused2"
+	}
+	return ""
+}
+
+func ConstructPacket(enc Encoding, pktType PacketType, data []byte) Packet {
+	buf := new(bytes.Buffer)
+	encType := bitPack(enc, pktType)
+	length := uint16(len(data))
+
+	binary.Write(buf, binary.BigEndian, VERSION)
+	binary.Write(buf, binary.BigEndian, encType)
+	binary.Write(buf, binary.BigEndian, length)
+	binary.Write(buf, binary.BigEndian, data)
+
+	return NewPacket(buf.Bytes())
+}
+
+func getPacketLength(data []byte) uint16 {
+	return binary.BigEndian.Uint16(data[HEADER_LENGTH_OFFSET:])
 }
