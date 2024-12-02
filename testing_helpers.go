@@ -5,30 +5,37 @@ import (
 	"encoding/binary"
 )
 
-var encStringTests = []struct {
-	data []byte
-	len  int
-}{
-	{
-		data: newEncodedString("Hello, TCP Server!"),
-		len:  17,
-	},
-	{
-		data: newEncodedString("Another test case"),
-		len:  17,
-	},
-	{
-		data: newEncodedString(""),
-		len:  0,
-	},
-	{
-		data: newEncodedString("Short"),
-		len:  5,
-	},
-	{
-		data: newEncodedString("A much longer test case to check buffer handling and server response for larger payloads."),
-		len:  79,
-	},
+// const (
+// 	PacketAuth PacketType = iota // outbound
+// 	PacketHealthCheckReq
+// 	PacketHealthCheckRes // outbound
+// 	PacketError
+// 	PacketCreateGame
+// 	PacketGameCreated // outbound
+// 	PacketJoinGame
+// 	PacketJoinGameSuccess // outbound
+// 	PacketJoinGameFailure // outbound
+// )
+
+type PacketTestInfo struct {
+	p       Packet
+	enc     Encoding
+	pktType PacketType
+	data    []byte
+	length  int
+}
+
+var Packets = []PacketTestInfo{
+	newTestPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D")),
+	newTestPacket(EncString, PacketAuth, []byte("012345")),
+	newTestPacket(EncString, PacketGameCreated, []byte("012345")),
+	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
+	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
+	newTestPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D")),
+	newTestPacket(EncString, PacketAuth, []byte("012345")),
+	newTestPacket(EncString, PacketGameCreated, []byte("012345")),
+	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
+	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
 }
 
 // helper functions to send data in correct encoding
@@ -37,10 +44,21 @@ func bitPack(enc Encoding, packetType PacketType) uint8 {
 	return uint8((enc&0x3)<<6) | uint8(packetType&0x3F)
 }
 
+// test packet wraps a packet and all its expected output: enc, type, data, and full length (data len + header size)
+func newTestPacket(enc Encoding, pktType PacketType, data []byte) PacketTestInfo {
+	return PacketTestInfo{
+		p:       ConstructPacket(enc, pktType, data),
+		enc:     enc,
+		pktType: pktType,
+		data:    data,
+		length:  len(data) + 4,
+	}
+}
+
 func newEncodedString(message string) []byte {
 	buf := new(bytes.Buffer)
 	version := VERSION
-	encType := bitPack(EncString, PacketTypeUnused1)
+	encType := bitPack(EncString, PacketHealthCheckReq)
 	length := uint16(len(message))
 
 	binary.Write(buf, binary.BigEndian, version)

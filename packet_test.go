@@ -7,7 +7,8 @@ import (
 
 func TestFramer(t *testing.T) {
 	framer := NewPacketFramer()
-	for i, p := range encStringTests {
+	for i, pt := range Packets {
+		p := pt.p
 		framer.push(p.data)
 		res := <-framer.C
 		if !bytes.Equal(res.data, p.data) {
@@ -17,17 +18,16 @@ func TestFramer(t *testing.T) {
 }
 
 func TestPacketFunctions(t *testing.T) {
-	for i, p := range encStringTests {
-		packet := NewPacket(p.data)
-		if packet.Encoding() != EncString {
-			t.Errorf("Enc mismatch on idx %d. Got %s want %s", i, EncToString(packet.Encoding()), EncToString(EncString))
+	for i, p := range Packets {
+		if p.enc != p.p.Encoding() {
+			t.Errorf("Enc mismatch on idx %d. Got %s want %s", i, EncToString(p.p.Encoding()), EncToString(p.enc))
 		}
 
-		if packet.Type() != PacketTypeUnused1 {
-			t.Errorf("Type mismatch on idx %d. Got %s want %s", i, TypeToString(packet.Type()), TypeToString(PacketTypeUnused1))
+		if p.pktType != p.p.Type() {
+			t.Errorf("Type mismatch on idx %d. Got %s want %s", i, TypeToString(p.p.Type()), TypeToString(p.pktType))
 		}
 
-		if !bytes.Equal(packet.Data(), p.data[PACKET_HEADER_SIZE:]) {
+		if !bytes.Equal(p.p.Data(), p.data) {
 			t.Errorf("Data mismatch on idx %d", i)
 		}
 	}

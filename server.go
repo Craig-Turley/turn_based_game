@@ -10,7 +10,7 @@ const (
 	PACKET_MAX_SIZE      = 1024
 	PACKET_HEADER_SIZE   = 4
 	HEADER_LENGTH_OFFSET = 2
-	ENC_TYPE_OFFSET      = 1
+	ENC_TYPE_OFFSET      = uint8(1)
 	MAX_DATA_SIZE        = PACKET_MAX_SIZE - PACKET_HEADER_SIZE
 )
 
@@ -35,8 +35,17 @@ func NewClient(conn net.Conn) *Client {
 	}
 }
 
+// Implements client as a writer
 func (c *Client) Write(data []byte) (int, error) {
 	return c.conn.Write(data)
+}
+
+func (c *Client) Addr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *Client) Disconnect() {
+	c.conn.Close()
 }
 
 // Packet is the way of interpreting data from our
@@ -68,6 +77,7 @@ func (p *Packet) Type() PacketType {
 	return PacketType(p.data[ENC_TYPE_OFFSET] & 0x3F)
 }
 
+// Method to grab just the data from the packet
 func (p *Packet) Data() []byte {
 	return p.data[PACKET_HEADER_SIZE:]
 }
@@ -79,4 +89,5 @@ func (p *Packet) Data() []byte {
 // packet that can be read by a server
 type Server interface {
 	Start() error
+	Close() error
 }

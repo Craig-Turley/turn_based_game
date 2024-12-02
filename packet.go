@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"io"
+	"log"
 )
 
 // Available encoding
@@ -20,30 +20,40 @@ const (
 type PacketType uint8
 
 const (
-	PacketTypeUnused1 PacketType = iota
-	PacketTypeUnused2
+	PacketAuth PacketType = iota // outbound
+	PacketHealthCheckReq
+	PacketHealthCheckRes // outbound
+	PacketError
 	PacketCreateGame
 	PacketGameCreated // outbound
+	PacketJoinGame
+	PacketJoinGameSuccess // outbound
+	PacketJoinGameFailure // outbound
 )
 
 type PacketFramer struct {
-	buf []byte
-	idx int
-	C   chan *Packet
+	buf   []byte
+	idx   int
+	C     chan *Packet
+	errch chan error
 }
 
 func NewPacketFramer() *PacketFramer {
 	return &PacketFramer{
-		buf: make([]byte, PACKET_MAX_SIZE, PACKET_MAX_SIZE),
-		C:   make(chan *Packet, 10),
+		buf:   make([]byte, PACKET_MAX_SIZE, PACKET_MAX_SIZE),
+		C:     make(chan *Packet, 10),
+		errch: make(chan error, 1), // I have a feeling this will bite me in the butt...
 	}
 }
 
 func FrameWithReader(framer *PacketFramer, reader io.Reader) error {
 	data := make([]byte, 100, 100)
 	for {
+		log.Printf("Waiting to read from connection...")
 		n, err := reader.Read(data)
 		if err != nil {
+			log.Printf("Error reading from connection %v", err)
+			framer.errch <- err
 			return err
 		}
 
@@ -63,6 +73,9 @@ func (p *PacketFramer) push(data []byte) error {
 	for {
 		packet, err := p.pull()
 		if err != nil || packet == nil {
+			// this line will cause the server to lock up no joke. unbuffered channels baby smh
+			// def a skill issue on my part ngl
+			// p.errch <- err
 			return err
 		}
 
@@ -100,10 +113,20 @@ func (p *PacketFramer) pull() (*Packet, error) {
 
 func TypeToString(t PacketType) string {
 	switch t {
-	case PacketTypeUnused1:
-		return "PacketTypeUnused1"
-	case PacketTypeUnused2:
-		return "PacketTypeUnused2"
+	case PacketHealthCheckReq:
+		return "PacketHealthCheckReq"
+	case PacketHealthCheckRes:
+		return "PacketHealthCheckRes"
+	case PacketCreateGame:
+		return "PacketCreateGame"
+	case PacketGameCreated:
+		return "PacketGameCreated"
+	case PacketJoinGame:
+		return "PacketJoinGame"
+	case PacketJoinGameSuccess:
+		return "PacketJoinGameSuccess"
+	case PacketJoinGameFailure:
+		return "PacketJoinGameFailure"
 	}
 	return ""
 }
@@ -123,16 +146,12 @@ func EncToString(e Encoding) string {
 }
 
 func ConstructPacket(enc Encoding, pktType PacketType, data []byte) Packet {
-	buf := new(bytes.Buffer)
-	encType := bitPack(enc, pktType)
-	length := uint16(len(data))
+	header := []byte{VERSION, bitPack(enc, pktType), 0, 0}
+	binary.BigEndian.PutUint16(header[HEADER_LENGTH_OFFSET:], uint16(len(data)))
 
-	binary.Write(buf, binary.BigEndian, VERSION)
-	binary.Write(buf, binary.BigEndian, encType)
-	binary.Write(buf, binary.BigEndian, length)
-	binary.Write(buf, binary.BigEndian, data)
+	buf := append(header, data...)
 
-	return NewPacket(buf.Bytes())
+	return NewPacket(buf)
 }
 
 func getPacketLength(data []byte) uint16 {
