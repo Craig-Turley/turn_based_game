@@ -23,12 +23,15 @@ const (
 	PacketAuth PacketType = iota // outbound
 	PacketHealthCheckReq
 	PacketHealthCheckRes // outbound
-	PacketError
+	PacketError          // outbound
 	PacketCreateGame
 	PacketGameCreated // outbound
 	PacketJoinGame
 	PacketJoinGameSuccess // outbound
 	PacketJoinGameFailure // outbound
+	PacketStartGame
+	PacketGameState
+	PacketDisconnect // outbound
 )
 
 type PacketFramer struct {

@@ -24,7 +24,9 @@ var (
 // contains connection and packet framer
 // for formatting byte stream
 type Client struct {
-	conn net.Conn
+	conn     net.Conn
+	gameID   GameID
+	gamePump chan<- Packet
 }
 
 // NewClient creates a client given a connection

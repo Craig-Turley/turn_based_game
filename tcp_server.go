@@ -72,9 +72,14 @@ func (m *GameManager) CreateNewGame(c *Client) {
 	m.games[game.id] = game
 	m.mu.Unlock()
 
+	go game.readLoop()
+
 	msg := []byte(fmt.Sprintf("%s", game.id))
 
 	c.Write(ConstructPacket(EncString, PacketGameCreated, msg).data)
+
+	c.gameID = game.id
+	c.gamePump = game.ch
 }
 
 func (m *GameManager) JoinGame(c *Client, id GameID) error {
@@ -89,7 +94,33 @@ func (m *GameManager) JoinGame(c *Client, id GameID) error {
 	game.clients = append(game.clients, c)
 	c.Write(ConstructPacket(EncString, PacketJoinGameSuccess, msg).data)
 
+	c.gameID = game.id
+	c.gamePump = game.ch
+
 	return nil
+}
+
+func (m *GameManager) Disconnect(c *Client) {
+	if len(c.gameID) == 0 {
+		return
+	}
+
+	game, ok := m.games[c.gameID]
+	if !ok {
+		// this would be so weird
+		log.Printf("Client %s attempted to disconnect from game that didn't exist", c.Addr())
+	}
+
+	game.clients = removeClient(game.clients, c)
+}
+
+func removeClient(clients []*Client, target *Client) []*Client {
+	for i, client := range clients {
+		if client == target {
+			return append(clients[:i], clients[i+1:]...)
+		}
+	}
+	return clients
 }
 
 func (m *GameManager) StartGame(c *Client, id GameID) error {
@@ -106,12 +137,35 @@ func (m *GameManager) StartGame(c *Client, id GameID) error {
 type Game struct {
 	clients []*Client
 	id      GameID
+	ch      chan Packet
+	quitch  chan interface{}
+}
+
+// TODO rename this to something more appropriate
+func (g *Game) readLoop() {
+	select {
+	case pkt := <-g.ch:
+		log.Printf("Packet with data %s", pkt.Data())
+		g.broadCast(pkt)
+	case <-g.quitch:
+		log.Printf("Game with ID %s finished", g.id)
+		return
+	}
+}
+
+func (g *Game) broadCast(pkt Packet) {
+	for _, c := range g.clients {
+		c.Write(pkt.Data())
+	}
+	log.Println("Done broadcasting")
 }
 
 func NewGame(c *Client) *Game {
 	return &Game{
 		clients: []*Client{c},
 		id:      GenerateGameId(),
+		ch:      make(chan Packet, 10),
+		quitch:  make(chan interface{}),
 	}
 }
 
@@ -202,8 +256,11 @@ func (t *TCPServer) handleConnection(client *Client) {
 
 func (t *TCPServer) registerHandlers() {
 	t.handlers[PacketHealthCheckReq] = t.healthCheckReqHandler
-	t.handlers[PacketCreateGame] = t.CreateGameHandler
-	t.handlers[PacketJoinGame] = t.JoinGameHandler
+	t.handlers[PacketCreateGame] = t.createGameHandler
+	t.handlers[PacketJoinGame] = t.joinGameHandler
+	t.handlers[PacketStartGame] = t.startGameHandler
+	t.handlers[PacketGameState] = t.gameStateHandler
+	t.handlers[PacketDisconnect] = t.disconnectHandler
 }
 
 func (t *TCPServer) disconnect(c *Client) {
@@ -211,6 +268,9 @@ func (t *TCPServer) disconnect(c *Client) {
 	delete(t.clients, c.Addr())
 	t.mu.Unlock()
 
+	t.gamemgr.Disconnect(c)
+
+	log.Printf("Disonnecting client %s", c.Addr())
 	c.Disconnect()
 }
 
@@ -224,7 +284,7 @@ func (t *TCPServer) healthCheckReqHandler(p *Packet, c *Client) error {
 	return nil
 }
 
-func (t *TCPServer) CreateGameHandler(p *Packet, c *Client) error {
+func (t *TCPServer) createGameHandler(p *Packet, c *Client) error {
 	log.Println("Create game request from client: ", c.Addr())
 
 	t.gamemgr.CreateNewGame(c)
@@ -232,12 +292,39 @@ func (t *TCPServer) CreateGameHandler(p *Packet, c *Client) error {
 	return nil
 }
 
-func (t *TCPServer) JoinGameHandler(p *Packet, c *Client) error {
+func (t *TCPServer) joinGameHandler(p *Packet, c *Client) error {
 	log.Printf("Join game request from client %s for game %s", c.Addr(), p.Data())
 
 	if err := t.gamemgr.JoinGame(c, GameID(p.Data())); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (t *TCPServer) startGameHandler(p *Packet, c *Client) error {
+	log.Printf("Start game request from client %s for game %s", c.Addr(), p.Data())
+
+	if err := t.gamemgr.StartGame(c, GameID(p.Data())); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
+	log.Printf("Game state packet sent from client %s.", c.Addr())
+
+	c.gamePump <- *p
+	log.Println("Sent packet to game")
+
+	return nil
+}
+
+func (t *TCPServer) disconnectHandler(p *Packet, c *Client) error {
+	log.Printf("Disconnect request from client %s", c.Addr())
+
+	t.disconnect(c)
 
 	return nil
 }
