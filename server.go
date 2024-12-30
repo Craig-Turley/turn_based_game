@@ -25,6 +25,7 @@ var (
 // for formatting byte stream
 type Client struct {
 	conn     net.Conn
+	clientID ClientID
 	gameID   GameID
 	gamePump chan<- Packet
 }

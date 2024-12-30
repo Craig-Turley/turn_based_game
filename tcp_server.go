@@ -12,6 +12,7 @@ import (
 
 type (
 	HandlerFunc func(p *Packet, c *Client) error
+	ClientID    string
 	GameID      string
 	GameState   uint8
 )
@@ -57,6 +58,15 @@ func GenerateGameId() GameID {
 		panic(err)
 	}
 	return GameID(fmt.Sprintf("%d", n.Int64()+100000))
+}
+
+func GenerateClientId() ClientID {
+	mx := big.NewInt(90000000)
+	n, err := rand.Int(rand.Reader, mx)
+	if err != nil {
+		panic(err)
+	}
+	return ClientID(fmt.Sprintf("%08d", n.Int64()+10000000))
 }
 
 type GameManager struct {
@@ -140,14 +150,27 @@ func (m *GameManager) StartGame(c *Client, id GameID) error {
 	return nil
 }
 
-const GSOFFSET = 0
+const (
+	GSVERSION = uint8(1)
+)
+
+const (
+	GSVERSIONOFFSET  = 0
+	GSTYPEOFFSET     = 1
+	GSCLIENTIDOFFSET = 2
+	GSDATAOFFSET     = 11
+)
 
 func gameState(data []byte) GameState {
-	return GameState(data[GSOFFSET])
+	return GameState(data[GSTYPEOFFSET])
+}
+
+func gameStateClientID(data []byte) ClientID {
+	return ClientID(data[GSCLIENTIDOFFSET : GSCLIENTIDOFFSET+9])
 }
 
 func gameStateData(data []byte) []byte {
-	return data[1:]
+	return data[GSDATAOFFSET:]
 }
 
 type Game struct {
