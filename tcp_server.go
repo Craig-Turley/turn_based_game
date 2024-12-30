@@ -13,11 +13,17 @@ import (
 type (
 	HandlerFunc func(p *Packet, c *Client) error
 	GameID      string
+	GameState   uint8
+)
+
+const (
+	ATTACK GameState = iota
 )
 
 var (
 	ERROR_NO_HANDLER_REGISTERED = errors.New("No handler registered for current packet type")
 	ERROR_INVALID_GAME_ID       = errors.New("GameID is invalid")
+	ERROR_INVALID_GAME_STATE    = errors.New("Client game state is invalid")
 )
 
 type TCPServer struct {
@@ -134,9 +140,20 @@ func (m *GameManager) StartGame(c *Client, id GameID) error {
 	return nil
 }
 
+const GSOFFSET = 0
+
+func gameState(data []byte) GameState {
+	return GameState(data[GSOFFSET])
+}
+
+func gameStateData(data []byte) []byte {
+	return data[1:]
+}
+
 type Game struct {
 	clients []*Client
 	id      GameID
+	state   GameState
 	ch      chan Packet
 	quitch  chan interface{}
 }
@@ -145,19 +162,38 @@ type Game struct {
 func (g *Game) readLoop() {
 	select {
 	case pkt := <-g.ch:
-		log.Printf("Packet with data %s", pkt.Data())
-		g.broadCast(pkt)
+		log.Printf("Gamestate of type %d", gameState(pkt.Data()))
+		log.Printf("Packet with data %s", gameStateData(pkt.Data()))
+		// err := g.broadCast(pkt)
+		// if err != nil {
+		// 	// TODO find a way to pipe this error back to the client
+		// 	log.Println("There was a packet validation/broadcast error")
+		// }
 	case <-g.quitch:
 		log.Printf("Game with ID %s finished", g.id)
 		return
 	}
 }
 
-func (g *Game) broadCast(pkt Packet) {
+func (g *Game) broadCast(pkt Packet) error {
+	err := g.validateGamePkt(pkt)
+	if err != nil {
+		return err
+	}
+
 	for _, c := range g.clients {
 		c.Write(pkt.Data())
 	}
 	log.Println("Done broadcasting")
+
+	return nil
+}
+
+func (g *Game) validateGamePkt(pkt Packet) error {
+	switch g.state {
+	// define game states to validate packet
+	}
+	return nil
 }
 
 func NewGame(c *Client) *Game {
@@ -270,7 +306,7 @@ func (t *TCPServer) disconnect(c *Client) {
 
 	t.gamemgr.Disconnect(c)
 
-	log.Printf("Disonnecting client %s", c.Addr())
+	log.Printf("Disconnecting client %s", c.Addr())
 	c.Disconnect()
 }
 

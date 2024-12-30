@@ -58,6 +58,9 @@ type Packet struct {
 	len  int
 }
 
+// Constructor that returns a packet
+// with the data and appropriate length
+// field
 func NewPacket(data []byte) Packet {
 	return Packet{
 		data: data,
