@@ -154,6 +154,9 @@ const (
 	GSVERSION = uint8(1)
 )
 
+// |  Version  |  Type   |  ClientID  |
+//    1 byte     1 byte     8 bytes
+
 const (
 	GSVERSIONOFFSET  = 0
 	GSTYPEOFFSET     = 1
@@ -273,7 +276,8 @@ func (t *TCPServer) accept() {
 }
 
 func (t *TCPServer) authenticate(client *Client) bool {
-	// TODO implement actual authenticateion method
+	// authenticate and send a generated client id
+	// maybe use a timeout?
 	return len(client.Addr().String()) != 0
 }
 
