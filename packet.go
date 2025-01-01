@@ -32,6 +32,7 @@ const (
 	PacketStartGame
 	PacketGameState
 	PacketDisconnect // outbound
+	PacketGameStateError
 )
 
 type PacketFramer struct {

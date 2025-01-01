@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net"
 	"sync"
+	"time"
 )
 
 type (
@@ -23,6 +24,9 @@ const (
 
 var (
 	ERROR_NO_HANDLER_REGISTERED = errors.New("No handler registered for current packet type")
+	ERROR_INVALID_AUTH_PKT      = errors.New("Invalid authentication packet")
+	ERROR_INVALID_AUTH_ID       = errors.New("Invalid authentication attempt")
+	ERROR_AUTH_TIMEOUT          = errors.New("Authentication attempt timed out")
 	ERROR_INVALID_GAME_ID       = errors.New("GameID is invalid")
 	ERROR_INVALID_GAME_STATE    = errors.New("Client game state is invalid")
 )
@@ -161,7 +165,7 @@ const (
 	GSVERSIONOFFSET  = 0
 	GSTYPEOFFSET     = 1
 	GSCLIENTIDOFFSET = 2
-	GSDATAOFFSET     = 11
+	GSDATAOFFSET     = 10
 )
 
 func gameState(data []byte) GameState {
@@ -216,6 +220,8 @@ func (g *Game) broadCast(pkt Packet) error {
 }
 
 func (g *Game) validateGamePkt(pkt Packet) error {
+	// validate client id == clientid of pkt
+
 	switch g.state {
 	// define game states to validate packet
 	}
@@ -262,23 +268,33 @@ func (t *TCPServer) accept() {
 		}
 
 		client := NewClient(conn)
-
-		ok := t.authenticate(client)
-		if !ok {
-			log.Printf("Failed to authenticate conn %s", client.Addr())
-			// directly call client.Disconnect here since theyre not registered
-			client.Disconnect()
-			return
-		}
-
 		go t.handleConnection(client)
 	}
 }
 
-func (t *TCPServer) authenticate(client *Client) bool {
-	// authenticate and send a generated client id
-	// maybe use a timeout?
-	return len(client.Addr().String()) != 0
+// yeah, this is probably the most secure authentication youve ever seen
+// dont be too amazed now
+func (t *TCPServer) authenticate(framer *PacketFramer, client *Client) error {
+	id := GenerateClientId()
+	client.Write(ConstructPacket(EncString, PacketAuth, []byte(id)).data)
+
+	select {
+	case authp := <-framer.C:
+		if authp.Type() != PacketAuth {
+			return ERROR_INVALID_AUTH_PKT
+		}
+
+		if ClientID(authp.Data()) != id {
+			return ERROR_INVALID_AUTH_ID
+		}
+	case <-time.After(time.Second * 5):
+		return ERROR_AUTH_TIMEOUT
+	}
+
+	client.clientID = id
+	log.Printf("Successful authentication of conn %s with ClientID %s", client.Addr(), id)
+
+	return nil
 }
 
 func (t *TCPServer) registerClient(client *Client) {
@@ -293,6 +309,13 @@ func (t *TCPServer) handleConnection(client *Client) {
 
 	framer := NewPacketFramer()
 	go FrameWithReader(framer, client.conn)
+
+	autherr := t.authenticate(framer, client)
+	if autherr != nil {
+		log.Printf("Failed to authenticate conn %s with err %s", client.Addr(), autherr.Error())
+		client.Disconnect()
+		return
+	}
 
 	for {
 		select {
