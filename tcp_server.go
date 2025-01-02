@@ -162,10 +162,10 @@ const (
 //    1 byte     1 byte     8 bytes
 
 const (
-	GSVERSIONOFFSET  = 0
-	GSTYPEOFFSET     = 1
-	GSCLIENTIDOFFSET = 2
-	GSDATAOFFSET     = 10
+	GSVERSIONOFFSET  = uint8(0)
+	GSTYPEOFFSET     = uint8(1)
+	GSCLIENTIDOFFSET = uint8(2)
+	GSDATAOFFSET     = uint8(10)
 )
 
 func gameState(data []byte) GameState {
@@ -173,7 +173,7 @@ func gameState(data []byte) GameState {
 }
 
 func gameStateClientID(data []byte) ClientID {
-	return ClientID(data[GSCLIENTIDOFFSET : GSCLIENTIDOFFSET+9])
+	return ClientID(data[GSCLIENTIDOFFSET : GSCLIENTIDOFFSET+8])
 }
 
 func gameStateData(data []byte) []byte {
@@ -194,11 +194,12 @@ func (g *Game) readLoop() {
 	case pkt := <-g.ch:
 		log.Printf("Gamestate of type %d", gameState(pkt.Data()))
 		log.Printf("Packet with data %s", gameStateData(pkt.Data()))
-		// err := g.broadCast(pkt)
-		// if err != nil {
-		// 	// TODO find a way to pipe this error back to the client
-		// 	log.Println("There was a packet validation/broadcast error")
-		// }
+		err := g.broadCast(pkt)
+		if err != nil {
+			// TODO find a way to pipe this error back to the client
+			// can probably just use clientID and sent back to client
+			log.Println("There was a packet validation/broadcast error")
+		}
 	case <-g.quitch:
 		log.Printf("Game with ID %s finished", g.id)
 		return
@@ -211,8 +212,13 @@ func (g *Game) broadCast(pkt Packet) error {
 		return err
 	}
 
+	log.Println("Data:", gameStateData(pkt.Data()))
+
 	for _, c := range g.clients {
-		c.Write(pkt.Data())
+		if c.clientID == gameStateClientID(pkt.Data()) {
+			continue
+		}
+		c.Write(gameStateData(pkt.Data()))
 	}
 	log.Println("Done broadcasting")
 
@@ -220,8 +226,6 @@ func (g *Game) broadCast(pkt Packet) error {
 }
 
 func (g *Game) validateGamePkt(pkt Packet) error {
-	// validate client id == clientid of pkt
-
 	switch g.state {
 	// define game states to validate packet
 	}
@@ -401,8 +405,13 @@ func (t *TCPServer) startGameHandler(p *Packet, c *Client) error {
 func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
 	log.Printf("Game state packet sent from client %s.", c.Addr())
 
+	if c.clientID != gameStateClientID(p.Data()) {
+		log.Println(c.clientID, gameStateClientID(p.Data()))
+		return ERROR_INVALID_AUTH_ID
+	}
+
 	c.gamePump <- *p
-	log.Println("Sent packet to game")
+	log.Println("Sent to game")
 
 	return nil
 }
