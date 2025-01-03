@@ -20,7 +20,19 @@ type (
 
 const (
 	ATTACK GameState = iota
+	DEFENSE
 )
+
+func GameStateToString(gs GameState) string {
+	switch gs {
+	case ATTACK:
+		return "Attack"
+	case DEFENSE:
+		return "Defense"
+	}
+
+	return "Invalid"
+}
 
 var (
 	ERROR_NO_HANDLER_REGISTERED = errors.New("No handler registered for current packet type")
@@ -190,19 +202,20 @@ type Game struct {
 
 // TODO rename this to something more appropriate
 func (g *Game) readLoop() {
-	select {
-	case pkt := <-g.ch:
-		log.Printf("Gamestate of type %d", gameState(pkt.Data()))
-		log.Printf("Packet with data %s", gameStateData(pkt.Data()))
-		err := g.broadCast(pkt)
-		if err != nil {
-			// TODO find a way to pipe this error back to the client
-			// can probably just use clientID and sent back to client
-			log.Println("There was a packet validation/broadcast error")
+	for {
+		select {
+		case pkt := <-g.ch:
+			log.Printf("Gamestate of type %s with data %s", GameStateToString(gameState(pkt.Data())), gameStateData(pkt.Data()))
+			err := g.broadCast(pkt)
+			if err != nil {
+				// TODO find a way to pipe this error back to the client
+				// can probably just use clientID and sent back to client
+				log.Println("There was a packet validation/broadcast error")
+			}
+		case <-g.quitch:
+			log.Printf("Game with ID %s finished", g.id)
+			return
 		}
-	case <-g.quitch:
-		log.Printf("Game with ID %s finished", g.id)
-		return
 	}
 }
 
@@ -218,7 +231,7 @@ func (g *Game) broadCast(pkt Packet) error {
 		if c.clientID == gameStateClientID(pkt.Data()) {
 			continue
 		}
-		c.Write(gameStateData(pkt.Data()))
+		c.Write(pkt.data)
 	}
 	log.Println("Done broadcasting")
 
@@ -226,8 +239,11 @@ func (g *Game) broadCast(pkt Packet) error {
 }
 
 func (g *Game) validateGamePkt(pkt Packet) error {
-	switch g.state {
-	// define game states to validate packet
+	switch gameState(pkt.Data()) {
+	case ATTACK:
+		return nil
+	case DEFENSE:
+		return nil
 	}
 	return nil
 }
