@@ -43,6 +43,10 @@ func (c *Client) Write(data []byte) (int, error) {
 	return c.conn.Write(data)
 }
 
+func (c *Client) Id() string {
+	return string(c.clientID)
+}
+
 func (c *Client) Addr() net.Addr {
 	return c.conn.RemoteAddr()
 }

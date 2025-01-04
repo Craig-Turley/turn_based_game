@@ -25,13 +25,14 @@ const (
 	PacketHealthCheckRes // outbound
 	PacketError          // outbound
 	PacketCreateGame
-	PacketGameCreated // outbound
+	PacketGameCreated       // outbound
+	PacketCreateGameFailure // outbound
 	PacketJoinGame
 	PacketJoinGameSuccess // outbound
 	PacketJoinGameFailure // outbound
 	PacketStartGame
 	PacketGameState
-	PacketDisconnect // outbound
+	PacketDisconnect
 	PacketGameStateError
 )
 
@@ -46,7 +47,7 @@ func NewPacketFramer() *PacketFramer {
 	return &PacketFramer{
 		buf:   make([]byte, PACKET_MAX_SIZE, PACKET_MAX_SIZE),
 		C:     make(chan *Packet, 10),
-		errch: make(chan error, 1), // I have a feeling this will bite me in the butt...
+		errch: make(chan error, 1), // I have a feeling this will bite me in the butt... update it did!! :'D
 	}
 }
 
@@ -115,22 +116,37 @@ func (p *PacketFramer) pull() (*Packet, error) {
 	return nil, nil
 }
 
+// PacketGameStateError
 func TypeToString(t PacketType) string {
 	switch t {
+	case PacketAuth:
+		return "PacketAuth"
 	case PacketHealthCheckReq:
 		return "PacketHealthCheckReq"
 	case PacketHealthCheckRes:
 		return "PacketHealthCheckRes"
+	case PacketError:
+		return "PacketError"
 	case PacketCreateGame:
 		return "PacketCreateGame"
 	case PacketGameCreated:
 		return "PacketGameCreated"
+	case PacketCreateGameFailure:
+		return "PacketCreateGameFailure"
 	case PacketJoinGame:
 		return "PacketJoinGame"
 	case PacketJoinGameSuccess:
 		return "PacketJoinGameSuccess"
 	case PacketJoinGameFailure:
 		return "PacketJoinGameFailure"
+	case PacketStartGame:
+		return "PacketStartGame"
+	case PacketGameState:
+		return "PacketGameState"
+	case PacketDisconnect:
+		return "PacketDisconnect"
+	case PacketGameStateError:
+		return "PacketGameStateError"
 	}
 	return ""
 }

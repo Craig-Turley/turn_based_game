@@ -1,65 +1,102 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"net"
-	"sync"
 	"testing"
+	"time"
 )
 
-const LOCAL_ADDR = "127.0.0.1:3000"
+const (
+	LOCAL_ADDR = "127.0.0.1:3000"
+)
 
-func TestCreateGame(t *testing.T) {
-	conn, err := net.Dial("tcp", LOCAL_ADDR)
-	if err != nil {
-		t.Fatalf(err.Error())
+func TestServer(t *testing.T) {
+	server := NewTCPServer(LOCAL_ADDR)
+	if err := server.Start(); err != nil {
+		t.Fatal(err.Error())
 	}
 
-	client := NewClient(conn)
-	pkt := ConstructPacket(EncString, PacketCreateGame, []byte{})
-
-	wg := new(sync.WaitGroup)
-	errch := make(chan error, 1)
-
-	wg.Add(1)
+	errch := make(chan error)
+	defer close(errch)
 	go func() {
-		defer wg.Done()
-		buf := make([]byte, PACKET_MAX_SIZE)
-		n, err := client.conn.Read(buf)
-		if err != nil {
-			panic(err)
+		for err := range errch {
+			if err != nil {
+				t.Error(err.Error())
+			}
 		}
-
-		res := NewPacket(buf[:n])
-		id := res.Data()
-		enc := res.Encoding()
-		t := res.Type()
-
-		if len(id) != 6 {
-			errch <- errors.New(fmt.Sprintf("ID mismatch. Got %d want 0", len(id)))
-			return
-		}
-
-		if enc != EncString {
-			errch <- errors.New(fmt.Sprintf("Packet enc mismatch. Got %s want %s", EncToString(enc), EncToString(EncString)))
-			return
-		}
-
-		if t != PacketGameCreated {
-			errch <- errors.New(fmt.Sprintf("Packet type mismatch. Got %s want %s", TypeToString(t), TypeToString(PacketCreateGame)))
-			return
-		}
-
-		errch <- nil
 	}()
 
-	client.Write(pkt.data)
+	clients := []*Client{}
+	for i := 0; i < 10; i++ {
+		conn, err := net.Dial("tcp", LOCAL_ADDR)
+		if err != nil {
+			t.Fatal(err)
+		}
+		client := NewClient(conn)
+		clients = append(clients, client)
 
-	wg.Wait()
+		framer := NewPacketFramer()
+		go FrameWithReader(framer, client.conn)
+		if err := authenticate(framer.C, client); err != nil {
+			errch <- err
+		}
 
-	err = <-errch
-	if err != nil {
-		t.Fatalf("%v", err)
+		go func() {
+			if err := read(framer.C); err != nil {
+				errch <- err
+			}
+		}()
 	}
+
+	for _, c := range clients {
+		c.Disconnect()
+	}
+
+	server.Close()
+}
+
+func authenticate(C chan *Packet, c *Client) error {
+	select {
+	case pkt := <-C:
+		c.Write(ConstructPacket(EncString, PacketAuth, pkt.Data()).data)
+	case <-time.After(time.Second * 5):
+		return ERROR_AUTH_TIMEOUT
+	}
+
+	return nil
+}
+
+func read(C chan *Packet) error {
+	for {
+		select {
+		case pkt := <-C:
+			switch pkt.Type() {
+			case PacketAuth:
+				if len(pkt.Data()) != 8 {
+					return ERROR_INVALID_AUTH_PKT
+				}
+			}
+		}
+	}
+}
+
+// const (
+// 	PacketAuth PacketType = iota // outbound
+// 	PacketHealthCheckReq
+// 	PacketHealthCheckRes // outbound
+// 	PacketError          // outbound
+// 	PacketCreateGame
+// 	PacketGameCreated       // outbound
+// 	PacketCreateGameFailure // outbound
+// 	PacketJoinGame
+// 	PacketJoinGameSuccess // outbound
+// 	PacketJoinGameFailure // outbound
+// 	PacketStartGame
+// 	PacketGameState
+// 	PacketDisconnect // outbound
+// 	PacketGameStateError
+// )
+
+func sendPacketAuth(c *Client) error {
+	return nil
 }

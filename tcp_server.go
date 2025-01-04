@@ -35,12 +35,14 @@ func GameStateToString(gs GameState) string {
 }
 
 var (
-	ERROR_NO_HANDLER_REGISTERED = errors.New("No handler registered for current packet type")
-	ERROR_INVALID_AUTH_PKT      = errors.New("Invalid authentication packet")
-	ERROR_INVALID_AUTH_ID       = errors.New("Invalid authentication attempt")
-	ERROR_AUTH_TIMEOUT          = errors.New("Authentication attempt timed out")
-	ERROR_INVALID_GAME_ID       = errors.New("GameID is invalid")
-	ERROR_INVALID_GAME_STATE    = errors.New("Client game state is invalid")
+	ERROR_NO_HANDLER_REGISTERED       = errors.New("No handler registered for current packet type")
+	ERROR_INVALID_AUTH_PKT            = errors.New("Invalid authentication packet")
+	ERROR_INVALID_AUTH_ID             = errors.New("Invalid authentication attempt")
+	ERROR_AUTH_TIMEOUT                = errors.New("Authentication attempt timed out")
+	ERROR_INVALID_GAME_ID             = errors.New("GameID is invalid")
+	ERROR_INVALID_GAME_JOIN_ATTEMPT   = errors.New("Cannot join game while currently in game")
+	ERROR_INVALID_CREATE_GAME_ATTEMPT = errors.New("Cannot create game while currently in game")
+	ERROR_INVALID_GAME_STATE          = errors.New("Client game state is invalid")
 )
 
 type TCPServer struct {
@@ -97,7 +99,13 @@ func NewGameManager() GameManager {
 	}
 }
 
-func (m *GameManager) CreateNewGame(c *Client) {
+func (m *GameManager) CreateNewGame(c *Client) error {
+	if len(c.gameID) != 0 {
+		log.Printf("Client with ID %s attmpted to create a game while already in a game", c.clientID)
+		c.Write(ConstructPacket(EncString, PacketCreateGameFailure, []byte(ERROR_INVALID_CREATE_GAME_ATTEMPT.Error())).data)
+		return ERROR_INVALID_CREATE_GAME_ATTEMPT
+	}
+
 	game := NewGame(c)
 
 	m.mu.Lock()
@@ -112,9 +120,17 @@ func (m *GameManager) CreateNewGame(c *Client) {
 
 	c.gameID = game.id
 	c.gamePump = game.ch
+
+	return nil
 }
 
 func (m *GameManager) JoinGame(c *Client, id GameID) error {
+	if len(c.gameID) != 0 {
+		log.Printf("Client with ID %s attempted to join game while currently in game", c.clientID)
+		c.Write(ConstructPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_JOIN_ATTEMPT.Error())).data)
+		return ERROR_INVALID_GAME_JOIN_ATTEMPT
+	}
+
 	game, ok := m.games[id]
 	if !ok {
 		log.Printf("Game of id %s does not exist!", id)
@@ -140,7 +156,7 @@ func (m *GameManager) Disconnect(c *Client) {
 	game, ok := m.games[c.gameID]
 	if !ok {
 		// this would be so weird
-		log.Printf("Client %s attempted to disconnect from game that didn't exist", c.Addr())
+		log.Printf("Client %s attempted to disconnect from game that didn't exist", c.Id())
 	}
 
 	game.clients = removeClient(game.clients, c)
@@ -376,12 +392,12 @@ func (t *TCPServer) disconnect(c *Client) {
 
 	t.gamemgr.Disconnect(c)
 
-	log.Printf("Disconnecting client %s", c.Addr())
+	log.Printf("Disconnecting client %s", c.Id())
 	c.Disconnect()
 }
 
 func (t *TCPServer) healthCheckReqHandler(p *Packet, c *Client) error {
-	log.Printf("Health check request from client: %s", c.Addr())
+	log.Printf("Health check request from client: %s", c.Id())
 
 	pkt := ConstructPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D"))
 
@@ -391,15 +407,17 @@ func (t *TCPServer) healthCheckReqHandler(p *Packet, c *Client) error {
 }
 
 func (t *TCPServer) createGameHandler(p *Packet, c *Client) error {
-	log.Println("Create game request from client: ", c.Addr())
+	log.Println("Create game request from client: ", c.Id())
 
-	t.gamemgr.CreateNewGame(c)
+	if err := t.gamemgr.CreateNewGame(c); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (t *TCPServer) joinGameHandler(p *Packet, c *Client) error {
-	log.Printf("Join game request from client %s for game %s", c.Addr(), p.Data())
+	log.Printf("Join game request from client %s for game %s", c.Id(), p.Data())
 
 	if err := t.gamemgr.JoinGame(c, GameID(p.Data())); err != nil {
 		return err
@@ -409,7 +427,7 @@ func (t *TCPServer) joinGameHandler(p *Packet, c *Client) error {
 }
 
 func (t *TCPServer) startGameHandler(p *Packet, c *Client) error {
-	log.Printf("Start game request from client %s for game %s", c.Addr(), p.Data())
+	log.Printf("Start game request from client %s for game %s", c.Id(), p.Data())
 
 	if err := t.gamemgr.StartGame(c, GameID(p.Data())); err != nil {
 		return err
@@ -419,7 +437,7 @@ func (t *TCPServer) startGameHandler(p *Packet, c *Client) error {
 }
 
 func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
-	log.Printf("Game state packet sent from client %s.", c.Addr())
+	log.Printf("Game state packet sent from client %s.", c.Id())
 
 	if c.clientID != gameStateClientID(p.Data()) {
 		log.Println(c.clientID, gameStateClientID(p.Data()))
@@ -433,7 +451,7 @@ func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
 }
 
 func (t *TCPServer) disconnectHandler(p *Packet, c *Client) error {
-	log.Printf("Disconnect request from client %s", c.Addr())
+	log.Printf("Disconnect request from client %s", c.Id())
 
 	t.disconnect(c)
 
