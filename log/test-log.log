@@ -1,0 +1,15 @@
+[Test Log] 2025/01/05 11:50:18 tcp_server_test.go:32: Health Check requests sent: 10
+[Test Log] 2025/01/05 11:50:18 tcp_server_test.go:32: Error count: 0
+[Test Log] 2025/01/05 11:52:41 tcp_server_test.go:32: Health Check requests sent: 10
+[Test Log] 2025/01/05 11:52:41 tcp_server_test.go:32: Error count: 0
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:41: Error - Invalid game id of val 367482
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:41: Error - Invalid game id of val 639513
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:41: Error - Invalid game id of val 872824
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:41: Error - Invalid game id of val 336879
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:41: Error - Invalid game id of val 386522
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:36: Health Check requests sent: 5
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:36: Create Game requests sent: 5
+[Test Log] 2025/01/05 12:17:36 tcp_server_test.go:36: Error count: 5
+[Test Log] 2025/01/05 12:18:24 tcp_server_test.go:36: Health Check requests sent: 5
+[Test Log] 2025/01/05 12:18:24 tcp_server_test.go:36: Create Game requests sent: 5
+[Test Log] 2025/01/05 12:18:24 tcp_server_test.go:36: Error count: 0

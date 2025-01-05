@@ -28,12 +28,12 @@ type PacketTestInfo struct {
 var Packets = []PacketTestInfo{
 	newTestPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D")),
 	newTestPacket(EncString, PacketAuth, []byte("012345")),
-	newTestPacket(EncString, PacketGameCreated, []byte("012345")),
+	newTestPacket(EncString, PacketCreateGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
 	newTestPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D")),
 	newTestPacket(EncString, PacketAuth, []byte("012345")),
-	newTestPacket(EncString, PacketGameCreated, []byte("012345")),
+	newTestPacket(EncString, PacketCreateGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
 }

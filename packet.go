@@ -25,12 +25,14 @@ const (
 	PacketHealthCheckRes // outbound
 	PacketError          // outbound
 	PacketCreateGame
-	PacketGameCreated       // outbound
+	PacketCreateGameSuccess // outbound
 	PacketCreateGameFailure // outbound
 	PacketJoinGame
 	PacketJoinGameSuccess // outbound
 	PacketJoinGameFailure // outbound
 	PacketStartGame
+	PacketLeaveGame
+	PacketLeaveGameSuccess
 	PacketGameState
 	PacketDisconnect
 	PacketGameStateError
@@ -51,12 +53,16 @@ func NewPacketFramer() *PacketFramer {
 	}
 }
 
-func FrameWithReader(framer *PacketFramer, reader io.Reader) error {
+func FrameWithReader(framer *PacketFramer, reader io.Reader, v ...interface{}) error {
 	data := make([]byte, 100, 100)
 	for {
 		log.Printf("Waiting to read from connection...")
 		n, err := reader.Read(data)
 		if err != nil {
+			if err == io.EOF {
+				log.Printf("Client with conn %s disconnected", v...)
+				return nil
+			}
 			log.Printf("Error reading from connection %v", err)
 			framer.errch <- err
 			return err
@@ -129,8 +135,8 @@ func TypeToString(t PacketType) string {
 		return "PacketError"
 	case PacketCreateGame:
 		return "PacketCreateGame"
-	case PacketGameCreated:
-		return "PacketGameCreated"
+	case PacketCreateGameSuccess:
+		return "PacketCreateGameSuccess"
 	case PacketCreateGameFailure:
 		return "PacketCreateGameFailure"
 	case PacketJoinGame:
@@ -177,3 +183,5 @@ func ConstructPacket(enc Encoding, pktType PacketType, data []byte) Packet {
 func getPacketLength(data []byte) uint16 {
 	return binary.BigEndian.Uint16(data[HEADER_LENGTH_OFFSET:])
 }
+
+func parsePacket() {}
