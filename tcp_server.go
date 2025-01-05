@@ -322,7 +322,7 @@ func (t *TCPServer) accept() {
 // dont be too amazed now
 func (t *TCPServer) authenticate(framer *PacketFramer, client *Client) error {
 	id := GenerateClientId()
-	client.Write(ConstructPacket(EncString, PacketAuth, []byte(id)).data)
+	client.Write(ConstructPacket(EncBytes, PacketAuth, []byte(id)).data)
 
 	select {
 	case authp := <-framer.C:

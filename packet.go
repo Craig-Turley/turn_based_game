@@ -13,7 +13,7 @@ const (
 	EncCustom Encoding = iota
 	EncJSON
 	EncString
-	EncUnused2
+	EncBytes
 )
 
 // Available packet types
@@ -165,8 +165,8 @@ func EncToString(e Encoding) string {
 		return "EncJSON"
 	case EncString:
 		return "EncString"
-	case EncUnused2:
-		return "EncUnused2"
+	case EncBytes:
+		return "EncBytes"
 	}
 	return ""
 }
