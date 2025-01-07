@@ -26,16 +26,13 @@ const (
 	PacketError          // outbound
 	PacketCreateGame
 	PacketCreateGameSuccess // outbound
-	PacketCreateGameFailure // outbound
 	PacketJoinGame
 	PacketJoinGameSuccess // outbound
-	PacketJoinGameFailure // outbound
 	PacketStartGame
 	PacketLeaveGame
 	PacketLeaveGameSuccess
 	PacketGameState
 	PacketDisconnect
-	PacketGameStateError
 )
 
 type PacketFramer struct {
@@ -122,7 +119,6 @@ func (p *PacketFramer) pull() (*Packet, error) {
 	return nil, nil
 }
 
-// PacketGameStateError
 func TypeToString(t PacketType) string {
 	switch t {
 	case PacketAuth:
@@ -137,22 +133,16 @@ func TypeToString(t PacketType) string {
 		return "PacketCreateGame"
 	case PacketCreateGameSuccess:
 		return "PacketCreateGameSuccess"
-	case PacketCreateGameFailure:
-		return "PacketCreateGameFailure"
 	case PacketJoinGame:
 		return "PacketJoinGame"
 	case PacketJoinGameSuccess:
 		return "PacketJoinGameSuccess"
-	case PacketJoinGameFailure:
-		return "PacketJoinGameFailure"
 	case PacketStartGame:
 		return "PacketStartGame"
 	case PacketGameState:
 		return "PacketGameState"
 	case PacketDisconnect:
 		return "PacketDisconnect"
-	case PacketGameStateError:
-		return "PacketGameStateError"
 	}
 	return ""
 }
@@ -183,5 +173,3 @@ func ConstructPacket(enc Encoding, pktType PacketType, data []byte) Packet {
 func getPacketLength(data []byte) uint16 {
 	return binary.BigEndian.Uint16(data[HEADER_LENGTH_OFFSET:])
 }
-
-func parsePacket() {}

@@ -18,27 +18,15 @@ type (
 	GameState   uint8
 )
 
-const (
-	ATTACK GameState = iota
-	DEFENSE
-)
-
-func GameStateToString(gs GameState) string {
-	switch gs {
-	case ATTACK:
-		return "Attack"
-	case DEFENSE:
-		return "Defense"
-	}
-
-	return "Invalid"
-}
-
+// TODO consider making these into codes
+// this will make for easier parsing on both
+// server and client side
+// ex PacketError -> Code 404
 var (
 	ERROR_NO_HANDLER_REGISTERED       = errors.New("No handler registered for current packet type")
 	ERROR_INVALID_AUTH_PKT            = errors.New("Invalid authentication packet")
 	ERROR_INVALID_AUTH_ID             = errors.New("Invalid authentication attempt")
-	ERROR_SERVER_TIMEOUT              = errors.New("Erros server timed out while attempting to complete request")
+	ERROR_SERVER_TIMEOUT              = errors.New("Error server timed out while attempting to complete request")
 	ERROR_AUTH_TIMEOUT                = errors.New("Authentication attempt timed out")
 	ERROR_INVALID_GAME_ID             = errors.New("GameID is invalid")
 	ERROR_INVALID_GAME_JOIN_ATTEMPT   = errors.New("Cannot join game while currently in game")
@@ -106,7 +94,6 @@ func NewGameManager() GameManager {
 func (m *GameManager) CreateNewGame(c *Client) error {
 	if len(c.gameID) != 0 {
 		log.Printf("Client with ID %s attmpted to create a game while already in a game", c.clientID)
-		c.Write(ConstructPacket(EncString, PacketCreateGameFailure, []byte(ERROR_INVALID_CREATE_GAME_ATTEMPT.Error())).data)
 		return ERROR_INVALID_CREATE_GAME_ATTEMPT
 	}
 
@@ -131,14 +118,17 @@ func (m *GameManager) CreateNewGame(c *Client) error {
 func (m *GameManager) JoinGame(c *Client, id GameID) error {
 	if len(c.gameID) != 0 {
 		log.Printf("Client with ID %s attempted to join game while currently in game", c.clientID)
-		c.Write(ConstructPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_JOIN_ATTEMPT.Error())).data)
 		return ERROR_INVALID_GAME_JOIN_ATTEMPT
+	}
+
+	// TODO find a way to parse this based on encoding
+	if len(id) != 6 {
+		return ERROR_INVALID_GAME_ID
 	}
 
 	game, ok := m.games[id]
 	if !ok {
 		log.Printf("Game of id %s does not exist!", id)
-		c.Write(ConstructPacket(EncString, PacketError, []byte(ERROR_INVALID_GAME_ID.Error())).data)
 		return ERROR_INVALID_GAME_ID
 	}
 
@@ -185,19 +175,44 @@ func (m *GameManager) StartGame(c *Client, id GameID) error {
 	_, ok := m.games[id]
 	if !ok {
 		log.Printf("Game of id %s does not exist!", id)
-		c.Write(ConstructPacket(EncString, PacketError, []byte(ERROR_INVALID_GAME_ID.Error())).data)
 		return ERROR_INVALID_GAME_ID
 	}
 
 	return nil
 }
 
+// |  Version  |  Type   |  ClientID  |
+//	1 byte     1 byte     8 bytes
+
 const (
 	GSVERSION = uint8(1)
 )
 
-// |  Version  |  Type   |  ClientID  |
-//    1 byte     1 byte     8 bytes
+const (
+	ATTACK GameState = iota
+	DEFENSE
+)
+
+func GameStateToString(gs GameState) string {
+	switch gs {
+	case ATTACK:
+		return "Attack"
+	case DEFENSE:
+		return "Defense"
+	}
+
+	return "Invalid"
+}
+
+func (g *Game) validateGamePkt(pkt Packet) error {
+	switch gameState(pkt.Data()) {
+	case ATTACK:
+		return nil
+	case DEFENSE:
+		return nil
+	}
+	return nil
+}
 
 const (
 	GSVERSIONOFFSET  = uint8(0)
@@ -261,16 +276,6 @@ func (g *Game) broadCast(pkt Packet) error {
 	}
 	log.Println("Done broadcasting")
 
-	return nil
-}
-
-func (g *Game) validateGamePkt(pkt Packet) error {
-	switch gameState(pkt.Data()) {
-	case ATTACK:
-		return nil
-	case DEFENSE:
-		return nil
-	}
 	return nil
 }
 
@@ -375,7 +380,7 @@ func (t *TCPServer) handleConnection(client *Client) {
 			err := handler(p, client)
 			if err != nil {
 				log.Println(err)
-				continue
+				client.Write(ConstructPacket(EncString, PacketError, []byte(err.Error())).data)
 			}
 		case err := <-framer.errch:
 			log.Printf("Error reading packet from client %s. Shutting down connection due to error %s", client.Addr(), err.Error())

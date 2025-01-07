@@ -30,16 +30,15 @@ var Packets = []PacketTestInfo{
 	newTestPacket(EncString, PacketAuth, []byte("012345")),
 	newTestPacket(EncString, PacketCreateGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
-	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
+	newTestPacket(EncString, PacketError, []byte(ERROR_INVALID_GAME_ID.Error())),
 	newTestPacket(EncString, PacketHealthCheckRes, []byte("Im alive :D")),
 	newTestPacket(EncString, PacketAuth, []byte("012345")),
 	newTestPacket(EncString, PacketCreateGameSuccess, []byte("012345")),
 	newTestPacket(EncString, PacketJoinGameSuccess, []byte("012345")),
-	newTestPacket(EncString, PacketJoinGameFailure, []byte(ERROR_INVALID_GAME_ID.Error())),
+	newTestPacket(EncString, PacketError, []byte(ERROR_INVALID_GAME_ID.Error())),
 }
 
 // helper functions to send data in correct encoding
-
 func bitPack(enc Encoding, packetType PacketType) uint8 {
 	return uint8((enc&0x3)<<6) | uint8(packetType&0x3F)
 }

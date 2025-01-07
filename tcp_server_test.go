@@ -19,13 +19,17 @@ type req func(C chan *Packet, c *Client) error
 var requests = []req{
 	sendHealthCheck,
 	sendPacketCreateGame,
+	sendInvalidPacketJoinGame,
+	sendTwoCreateGameRequests,
 }
 
 type TestLogger struct {
-	logger *log.Logger
-	errcnt int
-	hqReq  int
-	cgReq  int
+	logger   *log.Logger
+	errcnt   int
+	hqReq    int
+	cgReq    int
+	twocgReq int
+	invjgReq int
 }
 
 func (tl *TestLogger) Println(v ...interface{}) {
@@ -49,9 +53,19 @@ func (tl *TestLogger) IncCGReq() {
 	tl.cgReq++
 }
 
+func (tl *TestLogger) IncTwoCGReq() {
+	tl.twocgReq++
+}
+
+func (tl *TestLogger) IncInvJGReq() {
+	tl.invjgReq++
+}
+
 func (tl *TestLogger) LogResults() {
 	tl.Printf("Health Check requests sent: %d", tl.hqReq)
 	tl.Printf("Create Game requests sent: %d", tl.cgReq)
+	tl.Printf("Double Creaqte Game requests sent: %d", tl.cgReq)
+	tl.Printf("Invalid Join Game requests sent: %d", tl.invjgReq)
 	tl.Printf("Error count: %d", tl.errcnt)
 }
 
@@ -161,10 +175,10 @@ func sendHealthCheck(C chan *Packet, c *Client) error {
 	select {
 	case pkt := <-C:
 		if pkt.Type() != PacketHealthCheckRes {
-			TestLog.PrintErr(ERROR_INVALID_HQ_RES)
+			return ERROR_INVALID_HQ_RES
 		}
 	case <-time.After(time.Second * 5):
-		TestLog.PrintErr(ERROR_AUTH_TIMEOUT)
+		return ERROR_AUTH_TIMEOUT
 	}
 
 	return nil
@@ -178,14 +192,66 @@ func sendPacketCreateGame(C chan *Packet, c *Client) error {
 	select {
 	case pkt := <-C:
 		if pkt.Type() != PacketCreateGameSuccess {
-			TestLog.PrintErr(ERROR_INVALID_CREATE_GAME_ATTEMPT)
+			return ERROR_INVALID_CREATE_GAME_ATTEMPT
 		}
 
 		if !isValidID(string(pkt.Data())) {
-			TestLog.PrintErr(constructError("Invalid game id of val %s", string(pkt.Data())))
+			return constructError("Invalid game id of val %s", string(pkt.Data()))
 		}
 	case <-time.After(time.Second * 5):
-		TestLog.PrintErr(ERROR_SERVER_TIMEOUT)
+		return ERROR_SERVER_TIMEOUT
+	}
+
+	return nil
+}
+
+func sendTwoCreateGameRequests(C chan *Packet, c *Client) error {
+	c.Write(ConstructPacket(EncString, PacketCreateGame, []byte{}).data)
+	defer c.Disconnect()
+	TestLog.IncTwoCGReq()
+
+	select {
+	case pkt := <-C:
+		if pkt.Type() != PacketCreateGameSuccess {
+			return ERROR_INVALID_CREATE_GAME_ATTEMPT
+		}
+
+		if !isValidID(string(pkt.Data())) {
+			return constructError("Invalid game id of val %s", string(pkt.Data()))
+		}
+	case <-time.After(time.Second * 5):
+		return ERROR_SERVER_TIMEOUT
+	}
+
+	c.Write(ConstructPacket(EncString, PacketCreateGame, []byte{}).data)
+	select {
+	case pkt := <-C:
+		if pkt.Type() != PacketError {
+			return constructError("Expected PacketError. Got %s", TypeToString(pkt.Type()))
+		}
+	case <-time.After(time.Second * 5):
+		return ERROR_SERVER_TIMEOUT
+	}
+	return nil
+}
+
+func sendInvalidPacketJoinGame(C chan *Packet, c *Client) error {
+	c.Write(ConstructPacket(EncBytes, PacketJoinGame, []byte("12345678")).data)
+	defer c.Disconnect()
+	TestLog.IncInvJGReq()
+
+	select {
+	case pkt := <-C:
+		if pkt.Type() == PacketCreateGameSuccess {
+			return ERROR_INVALID_CREATE_GAME_ATTEMPT
+		}
+
+		if pkt.Type() != PacketError {
+			return constructError("Wanted PacketJoinGameFailure. Got %v", TypeToString(pkt.Type()))
+		}
+
+	case <-time.After(time.Second * 5):
+		return ERROR_SERVER_TIMEOUT
 	}
 
 	return nil
