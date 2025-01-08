@@ -18,11 +18,6 @@ type (
 	GameState   uint8
 )
 
-// TODO consider making these into codes
-// this will make for easier parsing on both
-// server and client side
-// ex PacketError -> Code 404
-
 type TCPServer struct {
 	addr     string
 	ln       net.Listener
@@ -46,6 +41,10 @@ func NewTCPServer(addr string) *TCPServer {
 	}
 }
 
+func (t *TCPServer) SetGameStateValidationFunc(vf func(pkt Packet) error) {
+	t.gamemgr.validationFunc = vf
+}
+
 func GenerateGameId() GameID {
 	mx := big.NewInt(900000)
 	n, err := rand.Int(rand.Reader, mx)
@@ -66,8 +65,9 @@ func GenerateClientId() ClientID {
 }
 
 type GameManager struct {
-	mu    sync.Mutex
-	games map[GameID]*Game
+	mu             sync.Mutex
+	games          map[GameID]*Game
+	validationFunc func(pkt Packet) error
 }
 
 func NewGameManager() GameManager {
@@ -175,32 +175,6 @@ const (
 )
 
 const (
-	ATTACK GameState = iota
-	DEFENSE
-)
-
-func GameStateToString(gs GameState) string {
-	switch gs {
-	case ATTACK:
-		return "Attack"
-	case DEFENSE:
-		return "Defense"
-	}
-
-	return "Invalid"
-}
-
-func (g *Game) validateGamePkt(pkt Packet) error {
-	switch gameState(pkt.Data()) {
-	case ATTACK:
-		return nil
-	case DEFENSE:
-		return nil
-	}
-	return nil
-}
-
-const (
 	GSVERSIONOFFSET  = uint8(0)
 	GSTYPEOFFSET     = uint8(1)
 	GSCLIENTIDOFFSET = uint8(2)
@@ -220,11 +194,12 @@ func gameStateData(data []byte) []byte {
 }
 
 type Game struct {
-	clients []*Client
-	id      GameID
-	state   GameState
-	ch      chan Packet
-	quitch  chan interface{}
+	clients        []*Client
+	id             GameID
+	state          GameState
+	ch             chan Packet
+	quitch         chan interface{}
+	validationFunc func(pkt Packet) error
 }
 
 // TODO rename this to something more appropriate
@@ -247,7 +222,7 @@ func (g *Game) readLoop() {
 }
 
 func (g *Game) broadCast(pkt Packet) error {
-	err := g.validateGamePkt(pkt)
+	err := g.validationFunc(pkt)
 	if err != nil {
 		return err
 	}
