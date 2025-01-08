@@ -9,5 +9,5 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	select {}
+	<-server.quitch
 }

@@ -450,7 +450,6 @@ func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
 	}
 
 	c.gamePump <- *p
-	log.Println("Sent to game")
 
 	return nil
 }
