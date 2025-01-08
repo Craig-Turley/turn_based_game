@@ -22,20 +22,6 @@ type (
 // this will make for easier parsing on both
 // server and client side
 // ex PacketError -> Code 404
-var (
-	ERROR_NO_HANDLER_REGISTERED       = errors.New("No handler registered for current packet type")
-	ERROR_INVALID_AUTH_PKT            = errors.New("Invalid authentication packet")
-	ERROR_INVALID_AUTH_ID             = errors.New("Invalid authentication attempt")
-	ERROR_SERVER_TIMEOUT              = errors.New("Error server timed out while attempting to complete request")
-	ERROR_AUTH_TIMEOUT                = errors.New("Authentication attempt timed out")
-	ERROR_INVALID_GAME_ID             = errors.New("GameID is invalid")
-	ERROR_INVALID_GAME_JOIN_ATTEMPT   = errors.New("Cannot join game while currently in game")
-	ERROR_INVALID_GAME_DISCONNECT     = errors.New("Client attempted to disconnect from game that didn't exist")
-	ERROR_CLIENT_NOT_IN_GAME          = errors.New("Client not registered with game")
-	ERROR_INVALID_CREATE_GAME_ATTEMPT = errors.New("Cannot create game while currently in game")
-	ERROR_INVALID_GAME_STATE          = errors.New("Client game state is invalid")
-	ERROR_INVALID_HQ_RES              = errors.New("Invalid health check response") // testing
-)
 
 type TCPServer struct {
 	addr     string
@@ -93,7 +79,7 @@ func NewGameManager() GameManager {
 
 func (m *GameManager) CreateNewGame(c *Client) error {
 	if len(c.gameID) != 0 {
-		log.Printf("Client with ID %s attmpted to create a game while already in a game", c.clientID)
+		log.Printf("Client with ID %s attempted to create a game while already in a game", c.clientID)
 		return ERROR_INVALID_CREATE_GAME_ATTEMPT
 	}
 
@@ -380,7 +366,10 @@ func (t *TCPServer) handleConnection(client *Client) {
 			err := handler(p, client)
 			if err != nil {
 				log.Println(err)
-				client.Write(ConstructPacket(EncString, PacketError, []byte(err.Error())).data)
+				// TODO figure out some way to handle possible json marshall error
+				data, _ := ConstructErrorData(err)
+				pkt := ConstructPacket(EncString, PacketError, data)
+				client.Write(pkt.data)
 			}
 		case err := <-framer.errch:
 			log.Printf("Error reading packet from client %s. Shutting down connection due to error %s", client.Addr(), err.Error())

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"io"
 	"log"
 )
@@ -168,6 +169,14 @@ func ConstructPacket(enc Encoding, pktType PacketType, data []byte) Packet {
 	buf := append(header, data...)
 
 	return NewPacket(buf)
+}
+
+func ConstructErrorData(err error) ([]byte, error) {
+	data, er := json.Marshal(NewError(err))
+	if er != nil {
+		return []byte{}, er
+	}
+	return data, nil
 }
 
 func getPacketLength(data []byte) uint16 {
