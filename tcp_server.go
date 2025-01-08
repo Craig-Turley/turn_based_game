@@ -83,7 +83,7 @@ func (m *GameManager) CreateNewGame(c *Client) error {
 		return ERROR_INVALID_CREATE_GAME_ATTEMPT
 	}
 
-	game := NewGame(c)
+	game := NewGame(c, m.validationFunc)
 
 	m.mu.Lock()
 	m.games[game.id] = game
@@ -240,12 +240,13 @@ func (g *Game) broadCast(pkt Packet) error {
 	return nil
 }
 
-func NewGame(c *Client) *Game {
+func NewGame(c *Client, vf func(pkt Packet) error) *Game {
 	return &Game{
-		clients: []*Client{c},
-		id:      GenerateGameId(),
-		ch:      make(chan Packet, 10),
-		quitch:  make(chan interface{}),
+		clients:        []*Client{c},
+		id:             GenerateGameId(),
+		ch:             make(chan Packet, 10),
+		quitch:         make(chan interface{}),
+		validationFunc: vf,
 	}
 }
 
