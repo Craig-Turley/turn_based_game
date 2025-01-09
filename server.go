@@ -44,7 +44,7 @@ type Client struct {
 	conn     net.Conn
 	clientID ClientID
 	gameID   GameID
-	gamePump chan<- Packet
+	gamePump chan<- *Packet
 }
 
 // NewClient creates a client given a connection

@@ -41,7 +41,7 @@ func NewTCPServer(addr string) *TCPServer {
 	}
 }
 
-func (t *TCPServer) SetGameStateValidationFunc(vf func(pkt Packet) error) {
+func (t *TCPServer) SetGameStateValidationFunc(vf func(pkt *Packet) error) {
 	t.gamemgr.validationFunc = vf
 }
 
@@ -229,7 +229,7 @@ func (t *TCPServer) gameStateHandler(p *Packet, c *Client) error {
 		return ERROR_INVALID_AUTH_ID
 	}
 
-	c.gamePump <- *p
+	c.gamePump <- p
 
 	return nil
 }

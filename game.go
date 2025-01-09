@@ -32,12 +32,13 @@ type Game struct {
 	clients        []*Client
 	id             GameID
 	state          GameState
-	ch             chan Packet
+	ch             chan *Packet
 	quitch         chan interface{}
-	validationFunc func(pkt Packet) error
+	validationFunc func(pkt *Packet) error
 }
 
 // TODO rename this to something more appropriate
+// i guess readLoop works
 func (g *Game) readLoop() {
 	for {
 		select {
@@ -56,7 +57,7 @@ func (g *Game) readLoop() {
 	}
 }
 
-func (g *Game) broadCast(pkt Packet) error {
+func (g *Game) broadCast(pkt *Packet) error {
 	err := g.validationFunc(pkt)
 	if err != nil {
 		return err
@@ -75,11 +76,11 @@ func (g *Game) broadCast(pkt Packet) error {
 	return nil
 }
 
-func NewGame(c *Client, vf func(pkt Packet) error) *Game {
+func NewGame(c *Client, vf func(pkt *Packet) error) *Game {
 	return &Game{
 		clients:        []*Client{c},
 		id:             GenerateGameId(),
-		ch:             make(chan Packet, 10),
+		ch:             make(chan *Packet, 10),
 		quitch:         make(chan interface{}),
 		validationFunc: vf,
 	}

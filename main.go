@@ -18,7 +18,7 @@ func GameStateToString(gs GameState) string {
 	return "Invalid"
 }
 
-func validateGamePkt(pkt Packet) error {
+func validateGamePkt(pkt *Packet) error {
 	switch gameState(pkt.Data()) {
 	case ATTACK:
 		return nil

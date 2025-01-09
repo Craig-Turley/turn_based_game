@@ -11,10 +11,10 @@ import (
 type GameManager struct {
 	mu             sync.Mutex
 	games          map[GameID]*Game
-	validationFunc func(pkt Packet) error
+	validationFunc func(pkt *Packet) error
 }
 
-func NopValidationFunc(pkt Packet) error {
+func NopValidationFunc(pkt *Packet) error {
 	return nil
 }
 
