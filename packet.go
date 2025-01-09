@@ -54,7 +54,6 @@ func NewPacketFramer() *PacketFramer {
 func FrameWithReader(framer *PacketFramer, reader io.Reader, v ...interface{}) error {
 	data := make([]byte, 100, 100)
 	for {
-		log.Printf("Waiting to read from connection...")
 		n, err := reader.Read(data)
 		if err != nil {
 			if err == io.EOF {

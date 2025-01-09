@@ -21,7 +21,6 @@ func GameStateToString(gs GameState) string {
 func validateGamePkt(pkt Packet) error {
 	switch gameState(pkt.Data()) {
 	case ATTACK:
-		log.Println("Hello from inside validation func")
 		return nil
 	case DEFENSE:
 		return nil
