@@ -1,0 +1,6 @@
+/web/node_modules
+/web/eslint.config.mjs
+/web/jsdoc.conf.json
+/web/package-lock.json
+/web/package.json
+
