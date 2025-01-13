@@ -32,6 +32,12 @@ const BUTTONS = [
   },
 ]
 
+const BUTTON_OPTIONS = {
+  PLAY: "Play",
+  CHANGE_TEAM: "Change Team",
+  UNUSED: "Unused",
+};
+
 const UIState = {
   TITLE_SCREEN: "TitleScreen",
   IN_GAME: "InGame",
@@ -58,6 +64,8 @@ class Game {
   }
 
   buttonClicked(mouse) {
+    console.log(mouse);
+    console.log(BUTTONS);
     const btn = this.buttons.find(btn => 
       mouse.x >= btn.x &&
       mouse.x <= btn.x + btn.width &&
@@ -69,9 +77,10 @@ class Game {
 
   resize() {
     const boundingBox = canvas.parentElement.getBoundingClientRect();
+    const devicePixelRatio = window.devicePixelRatio; 
 
-    this.ctx.canvas.width = boundingBox.width;
-    this.ctx.canvas.height = boundingBox.height; 
+    this.ctx.canvas.width = boundingBox.width * devicePixelRatio;
+    this.ctx.canvas.height = boundingBox.height * devicePixelRatio; 
     this.ctx.canvas.style.width = `${boundingBox.width}px`
     this.ctx.canvas.style.height = `${boundingBox.height}px`
 
@@ -100,13 +109,16 @@ class Game {
   }
   
   mouse(e) {
-    const rect = canvas.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width; 
+      const scaleY = canvas.height / rect.height; 
 
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    return {x: x, y: y}
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      return { x: x, y: y };
   }
+
 }
 
 class DisplayDriver {
@@ -123,27 +135,26 @@ class DisplayDriver {
     } 
   }
 
-drawUI() {
-  this.buttons.forEach((btn) => {
-    this.ctx.strokeStyle = "white";
-    this.ctx.beginPath();
-    this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
-    this.ctx.stroke();
+  drawUI() {
+    this.buttons.forEach((btn) => {
+      this.ctx.strokeStyle = "white";
+      this.ctx.beginPath();
+      this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
+      this.ctx.stroke();
 
-    const fontsize = Math.round(btn.width * 0.1);
-    this.ctx.fillStyle = "white";
-    this.ctx.font = `${fontsize}px Arial`;
+      const fontsize = Math.round(btn.width * 0.1);
+      this.ctx.fillStyle = "white";
+      this.ctx.font = `${fontsize}px Arial`;
 
-    this.ctx.textAlign = "center";
-    this.ctx.textBaseline = "middle"; 
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle"; 
 
-    const textX = btn.x + btn.width / 2; 
-    const textY = btn.y + btn.height / 2; 
+      const textX = btn.x + btn.width / 2; 
+      const textY = btn.y + btn.height / 2; 
 
-    this.ctx.fillText(btn.text, textX, textY);
-    console.log(btn.width, btn.height);
-  });
-}
+      this.ctx.fillText(btn.text, textX, textY);
+    });
+  }
 }
   
 function main() {
