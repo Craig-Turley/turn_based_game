@@ -1,8 +1,15 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+const Button = {
+  PLAY: "Play",
+  CHANGE_TEAM: "ChangeTeam",
+  UNUSED: "Unused",
+}
+
 const BUTTONS = [
   {
+    button: Button.PLAY,
     text: "Play",
     height: 100,
     width: 200,
@@ -10,6 +17,7 @@ const BUTTONS = [
     y: 0,
   },
   {
+    button: Button.CHANGE_TEAM,
     text: "Change Team",
     height: 100,
     width: 200,
@@ -17,6 +25,7 @@ const BUTTONS = [
     y: 0,
   },
   {
+    button: Button.UNUSED,
     text: "Unused",
     height: 100,
     width: 200,
@@ -24,6 +33,7 @@ const BUTTONS = [
     y: 0,
   },
   {
+    button: Button.UNUSED,
     text: "Unused",
     height: 100,
     width: 200,
@@ -32,47 +42,85 @@ const BUTTONS = [
   },
 ]
 
-const BUTTON_OPTIONS = {
-  PLAY: "Play",
-  CHANGE_TEAM: "Change Team",
-  UNUSED: "Unused",
-};
-
 const UIState = {
   TITLE_SCREEN: "TitleScreen",
   IN_GAME: "InGame",
   SETTINGS: "Settings",
 };
-  
+
+const Event = {
+  MOUSE_DOWN: "MouseDown", 
+}
+
+/*
+*   @param {EventType}
+*   @param {any]
+*   @returns {event}
+*/
+function constructEvent(eventType, data) {
+  return {
+    event: eventType,
+    data: data,
+  } 
+}
+
 class Game {
   constructor(ctx, buttons) {
     this.ctx = ctx;
     this.buttons = buttons;
-    this.displayDriver = new DisplayDriver(this.ctx, this.buttons);
+    this.eventBus = new EventBus(this);
+    this.displayDriver = new DisplayDriver(this.ctx, this.eventBus, this.buttons);
     this.uiState = UIState.TITLE_SCREEN;
-    window.addEventListener("resize", () => {
-      this.resize()
-    });
     requestAnimationFrame(() =>{ 
       this.draw();
     });
-    this.resize();
-    
-    window.addEventListener("mousedown", (e) => {
-      console.log(this.buttonClicked(this.mouse(e))); 
+  }
+
+
+  draw() {
+    this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    this.displayDriver.draw(this.uiState);
+    requestAnimationFrame(() => {
+      this.draw();
     });
   }
 
-  buttonClicked(mouse) {
-    console.log(mouse);
-    console.log(BUTTONS);
-    const btn = this.buttons.find(btn => 
-      mouse.x >= btn.x &&
-      mouse.x <= btn.x + btn.width &&
-      mouse.y >= btn.y &&
-      mouse.y <= btn.y + btn.height
-    );
-    return btn ? btn.text : null; 
+  update(event) {
+    switch (event.event) {
+      case Event.MOUSE_DOWN:
+        console.log(event);
+        this.handleBtn(event.data);
+        break;
+    } 
+  }
+
+  handleBtn(btn) {
+    switch (btn) {
+    case Button.PLAY:
+      this.uiState = UIState.IN_GAME;
+      break;
+    } 
+  }
+  
+
+}
+
+class DisplayDriver {
+  constructor(ctx, eventBus, buttons) {
+    this.ctx = ctx;
+    this.eventBus = eventBus;
+    this.buttons = buttons;
+    
+    window.addEventListener("resize", () => {
+      this.resize()
+    });
+    this.resize();
+
+    window.addEventListener("mousedown", (e) => {
+      const btn = this.buttonClicked(this.mouse(e));
+      const event = constructEvent(Event.MOUSE_DOWN, btn);
+      this.eventBus.send(event); 
+    });
   }
 
   resize() {
@@ -101,13 +149,27 @@ class Game {
     });
   }
 
-  draw() {
-    this.displayDriver.draw(this.uiState);
-    requestAnimationFrame(() => {
-      this.draw();
-    });
+  draw(uiState) {
+    switch (uiState) {
+    case UIState.TITLE_SCREEN:
+      this.drawUI();
+      break;
+    case UIState.IN_GAME:
+      this.drawGame();
+      break;
+    } 
   }
-  
+
+  buttonClicked(mouse) {
+    const btn = this.buttons.find(btn => 
+      mouse.x >= btn.x &&
+      mouse.x <= btn.x + btn.width &&
+      mouse.y >= btn.y &&
+      mouse.y <= btn.y + btn.height
+    );
+    return btn ? btn.button : null; 
+  }
+
   mouse(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width; 
@@ -117,22 +179,6 @@ class Game {
       const y = (e.clientY - rect.top) * scaleY;
 
       return { x: x, y: y };
-  }
-
-}
-
-class DisplayDriver {
-  constructor(ctx, buttons) {
-    this.ctx = ctx;
-    this.buttons = buttons;
-  }
-
-  draw(uiState) {
-    switch (uiState) {
-    case UIState.TITLE_SCREEN:
-      this.drawUI();
-      break;
-    } 
   }
 
   drawUI() {
@@ -155,6 +201,25 @@ class DisplayDriver {
       this.ctx.fillText(btn.text, textX, textY);
     });
   }
+
+  drawGame() {
+    this.ctx.fillText("Game", this.ctx.canvas.width / 2, this.ctx.canvas.height / 2);
+
+     
+  }
+}
+
+class EventBus {
+ 
+  // this is the game object
+  constructor(bus) {
+    this.bus = bus;
+  }
+  // sends an event to the game update loop
+  send(event) {
+    this.bus.update(event); 
+  } 
+
 }
   
 function main() {
