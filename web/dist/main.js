@@ -276,9 +276,46 @@ class UI {
       break;
     }
   }
-
 }
+
+class UIElement {
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.children = [];
+  }
+
+  draw(ctx) {
+    this.children.forEach((child) => child.draw(ctx));
+  }
+
+  resize() {
+    this.children.forEach((child) => child.resize(ctx));
+  }
+}
+
+const Alignment = {
+  VERTICAL: "Vertical",
+}
+
+class Panel extends UIElement {
+  constructor(x, y, width, height, alignment, margin) {
+    super(x, y, width, height) 
+    this.alignment = alignment;
+    this.margin = margin;
+  }
   
+  resize() {
+    switch (this.alignment) {
+    case Alignment.VERTICAL:
+      this.resizeVertical();
+    case
+    }
+  }
+}
+
 function main() {
   const game = new Game(ctx);
 }
