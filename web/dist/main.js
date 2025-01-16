@@ -1,12 +1,11 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const Button = {
+const ButtonType = {
   PLAY: "Play",
   CHANGE_TEAM: "ChangeTeam",
   UNUSED: "Unused",
 }
-
 
 const UIState = {
   TITLE_SCREEN: "TitleScreen",
@@ -34,6 +33,16 @@ class Game {
   constructor(ctx) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
+    // TODO find a better way to deal with this
+    // pretty dirty :(
+    const boundingBox = canvas.parentElement.getBoundingClientRect();
+    const devicePixelRatio = window.devicePixelRatio; 
+
+    this.ctx.canvas.width = boundingBox.width * devicePixelRatio;
+    this.ctx.canvas.height = boundingBox.height * devicePixelRatio; 
+    this.ctx.canvas.style.width = `${boundingBox.width}px`
+    this.ctx.canvas.style.height = `${boundingBox.height}px`
+
     this.ui = new UI(this.eventBus, this.ctx);
     this.displayDriver = new DisplayDriver(this.ctx, this.eventBus, this.ui);
     this.uiState = UIState.TITLE_SCREEN;
@@ -41,7 +50,6 @@ class Game {
       this.draw();
     });
   }
-
 
   draw() {
     this.displayDriver.draw(this.uiState);
@@ -61,13 +69,12 @@ class Game {
 
   handleBtn(btn) {
     switch (btn) {
-    case Button.PLAY:
+    case ButtonType.PLAY:
       this.uiState = UIState.IN_GAME;
       this.ui.update(UIState.IN_GAME);
       break;
     } 
   }
-  
 
 }
 
@@ -98,17 +105,17 @@ class DisplayDriver {
     this.ctx.canvas.style.width = `${boundingBox.width}px`
     this.ctx.canvas.style.height = `${boundingBox.height}px`
 
-    this.ui.resize();
+    this.ui.resize(); 
   }
 
   draw(uiState) {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     switch (uiState) {
     case UIState.TITLE_SCREEN:
-      this.drawUI();
+      this.ui.drawTitleScreenUi(); 
       break;
     case UIState.IN_GAME:
-      this.drawGame();
+      this.ui.drawGameUi(); 
       break;
     } 
   }
@@ -134,48 +141,6 @@ class DisplayDriver {
       return { x: x, y: y };
   }
 
-  drawUI() {
-    this.ui.mainScreenButtons.forEach((btn) => {
-      this.ctx.strokeStyle = "white";
-      this.ctx.beginPath();
-      this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
-      this.ctx.stroke();
-
-      const fontsize = Math.round(btn.width * 0.1);
-      this.ctx.fillStyle = "white";
-      this.ctx.font = `${fontsize}px Arial`;
-
-      this.ctx.textAlign = "center";
-      this.ctx.textBaseline = "middle"; 
-
-      const textX = btn.x + btn.width / 2; 
-      const textY = btn.y + btn.height / 2; 
-
-      this.ctx.fillText(btn.text, textX, textY);
-    });
-  }
-
-  drawGame() {
-    this.ctx.fillText("Game", this.ctx.canvas.width / 2, this.ctx.canvas.height / 2);
-    this.ui.inGameButtons.forEach((btn) => {
-      this.ctx.strokeStyle = "white";
-      this.ctx.beginPath();
-      this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
-      this.ctx.stroke();
-
-      const fontsize = Math.round(btn.width * 0.1);
-      this.ctx.fillStyle = "white";
-      this.ctx.font = `${fontsize}px Arial`;
-
-      this.ctx.textAlign = "center";
-      this.ctx.textBaseline = "middle"; 
-
-      const textX = btn.x + btn.width / 2; 
-      const textY = btn.y + btn.height / 2; 
-
-      this.ctx.fillText(btn.text, textX, textY);
-    });
-  }
 }
 
 class EventBus {
@@ -191,91 +156,82 @@ class EventBus {
 
 }
 
+const mainScreenButtons = [
+  {
+    button: ButtonType.PLAY,
+    text: "Play",
+    height: 100,
+    width: 200,
+    x: 0,
+    y: 0,
+  },
+  {
+    button: ButtonType.CHANGE_TEAM,
+    text: "Change Team",
+    height: 100,
+    width: 200,
+    x: 0,
+    y: 0,
+  },
+  {
+    button: ButtonType.UNUSED,
+    text: "Unused",
+    height: 100,
+    width: 200,
+    x: 0,
+    y: 0,
+  },
+  {
+    button: ButtonType.UNUSED,
+    text: "Unused",
+    height: 100,
+    width: 200,
+    x: 0,
+    y: 0,
+  },
+];
+
+function constructTitleScreen(ctxWidth, ctxHeight) {
+  const mainPanel = new Panel(
+    ctxWidth * 0.25,
+    ctxHeight * 0.25,
+    ctxWidth * 0.5,
+    ctxHeight * 0.5,
+    Alignment.VERTICAL,
+    10
+  );
+
+  mainScreenButtons.forEach((btn, index) => {
+    const buttonWidth = mainPanel.width * 0.8;
+    const buttonHeight = mainPanel.height / mainScreenButtons.length - mainPanel.margin;
+    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text);
+    mainPanel.addChild(childBtn);
+  });
+
+  mainPanel.resize();
+  return mainPanel;
+}
+
 class UI {
-  mainScreenButtons = [
-    {
-      button: Button.PLAY,
-      text: "Play",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      button: Button.CHANGE_TEAM,
-      text: "Change Team",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      button: Button.UNUSED,
-      text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      button: Button.UNUSED,
-      text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-  ];
-
-  inGameButtons = [
-    {
-      text: "Panel",
-      height: 100,
-      width: 100,
-      x: 0,
-      y: 0,
-    },
-  ];
-
-  currentButtons = this.mainScreenButtons;
-
   constructor(eventBus, ctx) {
     this.eventBus = eventBus;
     this.ctx = ctx;
+    this.titleScreen = constructTitleScreen(this.ctx.canvas.width, this.ctx.canvas.height);
+  }
+
+  drawTitleScreenUi() {
+    this.titleScreen.draw(this.ctx);
   }
 
   resize() {
-    // mainscreen buttons ------------
-    // bounding box of buttons
-    const height = Math.round(this.ctx.canvas.height - (this.ctx.canvas.height * 0.6));
-    const top = Math.round((this.ctx.canvas.height / 2) - (height / 2));
-    const offset = Math.round(height / this.mainScreenButtons.length);
+    this.titleScreen.height = Math.floor(this.ctx.canvas.height * 0.4);
+    this.titleScreen.width = Math.floor(this.titleScreen.height * 0.5);
+    this.titleScreen.x = Math.floor((this.ctx.canvas.width / 2) - (this.titleScreen.width / 2));
+    this.titleScreen.y = Math.floor((this.ctx.canvas.height / 2) - (this.titleScreen.height / 2));
 
-    // h x w of each button
-    const h = Math.round(offset - (offset * 0.2));
-    const w = height * 0.5;
-
-    this.mainScreenButtons.forEach((button, i) => {
-      button.width = w;
-      button.height = h;
-      button.x = Math.round((this.ctx.canvas.width / 2) - (button.width / 2)); 
-      button.y = top + (offset * i);
-    });
-
-    // in game buttons -----------
-    this.inGameButtons[0].height = Math.round(this.ctx.canvas.height * 0.1);
-    this.inGameButtons[0].width = Math.round(this.ctx.canvas.width);
-    this.inGameButtons[0].x = 0;
-    this.inGameButtons[0].y = Math.round(this.ctx.canvas.height - this.inGameButtons[0].height);
+    this.titleScreen.resize();
   }
 
-  update(uiState) {
-    switch (uiState) {
-    case UIState.IN_GAME:
-      this.currentButtons = this.inGameButtons;
-      break;
-    }
-  }
 }
 
 class UIElement {
@@ -298,21 +254,85 @@ class UIElement {
 
 const Alignment = {
   VERTICAL: "Vertical",
+  HORIZONTAL: "Horizontal",
 }
 
 class Panel extends UIElement {
   constructor(x, y, width, height, alignment, margin) {
-    super(x, y, width, height) 
+    super(x, y, width, height);
     this.alignment = alignment;
     this.margin = margin;
   }
-  
+
   resize() {
+    const totalChildren = this.children.length;
+    let width, height, xOffset, yOffset;
+
     switch (this.alignment) {
-    case Alignment.VERTICAL:
-      this.resizeVertical();
-    case
+      case Alignment.VERTICAL:
+        height = Math.floor((this.height / totalChildren) - this.margin);
+        width = this.width;
+        xOffset = 0;
+        yOffset = (index) => (height + this.margin) * index;
+        break;
+
+      case Alignment.HORIZONTAL:
+        width = Math.floor((this.width / totalChildren) - this.margin);
+        height = this.height;
+        xOffset = (index) => (width + this.margin) * index;
+        yOffset = 0;
+        break;
     }
+
+    for (const [index, child] of this.children.entries()) {
+      child.width = width;
+      child.height = height;
+      child.x = this.x + (xOffset ? xOffset(index) : 0);
+      child.y = this.y + (yOffset ? yOffset(index) : 0);
+    }
+
+    super.resize();
+  }
+  
+  addChild(child) {
+    this.children.push(child);
+  }
+}
+
+class Button extends UIElement {
+  constructor(x, y, width, height, text) {
+    super(x, y, width, height);
+    this.text = text;
+  }
+
+  resize() {}
+
+  draw(ctx) {
+    ctx.strokeStyle = "white";
+    ctx.beginPath();
+    ctx.rect(this.x, this.y, this.width, this.height);
+    ctx.stroke();
+
+    const fontsize = Math.round(this.width * 0.1);
+    ctx.fillStyle = "white";
+    ctx.font = `${fontsize}px Arial`;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle"; 
+
+    const textX = this.x + this.width / 2; 
+    const textY = this.y + this.height / 2; 
+
+    ctx.fillText(this.text, textX, textY);
+  }
+
+  containsPoint(x, y) {
+    return (
+      x >= this.x &&
+      x <= this.x + this.width &&
+      y >= this.y &&
+      y <= this.y + this.height
+    );
   }
 }
 
