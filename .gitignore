@@ -3,4 +3,4 @@
 /web/jsdoc.conf.json
 /web/package-lock.json
 /web/package.json
-
+/web/dist/*.js
