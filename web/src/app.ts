@@ -2,6 +2,8 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
 enum EventType {
+  CREATE_ROOM,
+  JOIN_ROOM,
   PLAY,
   CHANGE_TEAM,
   UNUSED,
@@ -53,7 +55,7 @@ class Game {
 
   update(event: event): void {
     switch (event.event) {
-      case EventType.PLAY:
+      case EventType.CREATE_ROOM:
         this.uiState = UIMode.InGame;
         this.ui.setMode(this.uiState);
         break;
@@ -64,10 +66,28 @@ class Game {
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
+  private background = [
+    '../dist/assets/parallax_background/plx-1.png',
+    '../dist/assets/parallax_background/plx-2.png',
+    '../dist/assets/parallax_background/plx-3.png',
+    '../dist/assets/parallax_background/plx-4.png',
+    '../dist/assets/parallax_background/plx-5.png',
+  ];
+  private loadedBackground: CanvasImageSource[];
 
   constructor(ctx: CanvasRenderingContext2D, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
+    const loaded: CanvasImageSource[] = [];
+    this.background.forEach((layer) => {
+      const img = new Image();
+      img.src = layer;
+      img.onload = () => {
+        loaded.push(img);
+      }
+    });
+
+    this.loadedBackground = loaded;
 
     window.addEventListener("resize", () => {
       this.resize();
@@ -90,10 +110,18 @@ class DisplayDriver {
   draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
+    this.drawBackground();
     this.drawUI(uiState);
   }
+  
+  private drawBackground() {
+    this.loadedBackground.forEach((layer) => { 
+      this.ctx.drawImage(layer, 0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    });
 
-  drawUI(uiState: UIMode) {
+  }
+
+  private drawUI(uiState: UIMode) {
     switch (uiState) {
       case UIMode.TitleScreen:
         this.ui.titleScreen.children.forEach((child) => {
@@ -148,8 +176,16 @@ class EventBus {
 function constructTitleScreen(): Panel {
   const mainScreenButtons = [
     {
-      event: EventType.PLAY,
-      text: "Play",
+      event: EventType.CREATE_ROOM,
+      text: "Create Room",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.CHANGE_TEAM,
+      text: "Join Room",
       height: 100,
       width: 200,
       x: 0,
@@ -158,14 +194,6 @@ function constructTitleScreen(): Panel {
     {
       event: EventType.CHANGE_TEAM,
       text: "Change Team",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      event: EventType.UNUSED,
-      text: "Unused",
       height: 100,
       width: 200,
       x: 0,
