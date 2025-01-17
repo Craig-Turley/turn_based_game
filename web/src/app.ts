@@ -1,10 +1,10 @@
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
-enum ButtonType {
-  PLAY = "Play",
-  CHANGE_TEAM = "ChangeTeam",
-  UNUSED = "Unused",
+enum EventType {
+  PLAY,
+  CHANGE_TEAM,
+  UNUSED,
 }
 
 enum UIState {
@@ -13,16 +13,12 @@ enum UIState {
   SETTINGS = "Settings",
 }
 
-enum EventType {
-  MOUSE_DOWN = "MouseDown",
-}
-
 interface event {
   event: EventType;
   data: any;
 }
 
-function constructEvent(eventType: EventType, data: any): event {
+function ConstructEvent(eventType: EventType, data: any): event {
   return {
     event: eventType,
     data: data,
@@ -34,23 +30,14 @@ class Game {
   private eventBus: EventBus;
   private ui: UI;
   private displayDriver: DisplayDriver;
-  private uiState: UIState;
+  private uiState: UIMode;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
-
-    const boundingBox = canvas.parentElement!.getBoundingClientRect();
-    const devicePixelRatio = window.devicePixelRatio;
-
-    this.ctx.canvas.width = boundingBox.width * devicePixelRatio;
-    this.ctx.canvas.height = boundingBox.height * devicePixelRatio;
-    this.ctx.canvas.style.width = `${boundingBox.width}px`;
-    this.ctx.canvas.style.height = `${boundingBox.height}px`;
-
-    this.ui = new UI(this.eventBus, this.ctx);
-    this.displayDriver = new DisplayDriver(this.ctx, this.eventBus, this.ui);
-    this.uiState = UIState.TITLE_SCREEN;
+    this.ui = new UI(this.eventBus);
+    this.displayDriver = new DisplayDriver(this.ctx, this.ui);
+    this.uiState = UIMode.TitleScreen;
 
     requestAnimationFrame(() => {
       this.draw();
@@ -66,18 +53,9 @@ class Game {
 
   update(event: event): void {
     switch (event.event) {
-      case EventType.MOUSE_DOWN:
-        console.log(event);
-        this.handleBtn(event.data);
-        break;
-    }
-  }
-
-  private handleBtn(btn: ButtonType): void {
-    switch (btn) {
-      case ButtonType.PLAY:
-        this.uiState = UIState.IN_GAME;
-        // this.ui.update(UIState.IN_GAME);
+      case EventType.PLAY:
+        this.uiState = UIMode.InGame;
+        this.ui.setMode(this.uiState);
         break;
     }
   }
@@ -85,24 +63,16 @@ class Game {
 
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
-  private eventBus: EventBus;
   private ui: UI;
 
-  constructor(ctx: CanvasRenderingContext2D, eventBus: EventBus, ui: UI) {
+  constructor(ctx: CanvasRenderingContext2D, ui: UI) {
     this.ctx = ctx;
-    this.eventBus = eventBus;
     this.ui = ui;
 
     window.addEventListener("resize", () => {
       this.resize();
     });
     this.resize();
-
-    // window.addEventListener("mousedown", (e: MouseEvent) => {
-    //   const btn = this.buttonClicked(this.mouse(e));
-    //   const event = constructEvent(EventType.MOUSE_DOWN, btn);
-    //   this.eventBus.send(event);
-    // });
   }
 
   private resize(): void {
@@ -114,41 +84,51 @@ class DisplayDriver {
     this.ctx.canvas.style.width = `${boundingBox.width}px`;
     this.ctx.canvas.style.height = `${boundingBox.height}px`;
 
-    this.ui.resize();
+    this.ui.resize(this.ctx.canvas.width, this.ctx.canvas.height);
   }
 
-  draw(uiState: UIState): void {
+  draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+
+    this.drawUI(uiState);
+  }
+
+  drawUI(uiState: UIMode) {
     switch (uiState) {
-      case UIState.TITLE_SCREEN:
-        this.ui.drawTitleScreenUi();
+      case UIMode.TitleScreen:
+        this.ui.titleScreen.children.forEach((child) => {
+          if (child instanceof Button) {
+            this.drawButton(child);
+          }
+        });
         break;
-      // case UIState.IN_GAME:
-      //   this.ui.drawGameUi();
-      //   break;
+      case UIMode.InGame:
+        this.ui.gameScreen.children.forEach((child) => {
+          if (child instanceof Button) {
+            this.drawButton(child);
+          }
+        });
+        break;
     }
   }
 
-  // private buttonClicked(mouse: { x: number; y: number }): ButtonType | null {
-  //   const btn = this.ui.currentButtons.find(
-  //     (btn) =>
-  //       mouse.x >= btn.x &&
-  //       mouse.x <= btn.x + btn.width &&
-  //       mouse.y >= btn.y &&
-  //       mouse.y <= btn.y + btn.height
-  //   );
-  //   return btn ? btn.button : null;
-  // }
+  private drawButton(btn: Button) {
+    this.ctx.strokeStyle = "white";
+    this.ctx.beginPath();
+    this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
+    this.ctx.stroke();
 
-  private mouse(e: MouseEvent): { x: number; y: number } {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const fontSize = Math.round(btn.width * 0.1);
+    this.ctx.fillStyle = "white";
+    this.ctx.font = `${fontSize}px Arial`;
 
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
 
-    return { x, y };
+    const textX = btn.x + btn.width / 2;
+    const textY = btn.y + btn.height / 2;
+
+    this.ctx.fillText(btn.text, textX, textY);
   }
 }
 
@@ -164,47 +144,48 @@ class EventBus {
   }
 }
 
-const mainScreenButtons = [
-  {
-    button: ButtonType.PLAY,
-    text: "Play",
-    height: 100,
-    width: 200,
-    x: 0,
-    y: 0,
-  },
-  {
-    button: ButtonType.CHANGE_TEAM,
-    text: "Change Team",
-    height: 100,
-    width: 200,
-    x: 0,
-    y: 0,
-  },
-  {
-    button: ButtonType.UNUSED,
-    text: "Unused",
-    height: 100,
-    width: 200,
-    x: 0,
-    y: 0,
-  },
-  {
-    button: ButtonType.UNUSED,
-    text: "Unused",
-    height: 100,
-    width: 200,
-    x: 0,
-    y: 0,
-  },
-];
 
-function constructTitleScreen(ctxWidth: number, ctxHeight: number): Panel {
+function constructTitleScreen(): Panel {
+  const mainScreenButtons = [
+    {
+      event: EventType.PLAY,
+      text: "Play",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.CHANGE_TEAM,
+      text: "Change Team",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.UNUSED,
+      text: "Unused",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.UNUSED,
+      text: "Unused",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+  ];
+
   const mainPanel = new Panel(
-    ctxWidth * 0.25,
-    ctxHeight * 0.25,
-    ctxWidth * 0.5,
-    ctxHeight * 0.5,
+    0,
+    0,
+    0,
+    0,
     Alignment.VERTICAL,
     10
   );
@@ -213,7 +194,7 @@ function constructTitleScreen(ctxWidth: number, ctxHeight: number): Panel {
     const buttonWidth = mainPanel.width * 0.8;
     const buttonHeight =
       mainPanel.height / mainScreenButtons.length - mainPanel.margin;
-    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text);
+    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text, btn.event);
     mainPanel.addChild(childBtn);
   });
 
@@ -221,36 +202,170 @@ function constructTitleScreen(ctxWidth: number, ctxHeight: number): Panel {
   return mainPanel;
 }
 
+function constructGameScreen(): Panel {
+  const mainScreenButtons = [
+    {
+      event: EventType.UNUSED,
+      text: "Attack",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.UNUSED,
+      text: "Unused",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.UNUSED,
+      text: "Unused",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+    {
+      event: EventType.UNUSED,
+      text: "Unused",
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    },
+  ];
+
+  const mainPanel = new Panel(
+    0,
+    0,
+    0,
+    0,
+    Alignment.HORIZONTAL,
+    10
+  );
+
+  mainScreenButtons.forEach((btn) => {
+    const buttonWidth = mainPanel.width * 0.8;
+    const buttonHeight =
+      mainPanel.height / mainScreenButtons.length - mainPanel.margin;
+    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text, btn.event);
+    mainPanel.addChild(childBtn);
+  });
+
+  mainPanel.resize();
+  return mainPanel;
+}
+
+enum UIMode {
+  TitleScreen,
+  InGame,
+}
+
 class UI {
   private eventBus: EventBus;
-  private ctx: CanvasRenderingContext2D;
-  private titleScreen: Panel;
 
-  constructor(eventBus: EventBus, ctx: CanvasRenderingContext2D) {
+  public curMode: Panel;
+  public titleScreen: Panel;
+  public gameScreen: Panel;
+
+  constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
-    this.ctx = ctx;
-    this.titleScreen = constructTitleScreen(
-      this.ctx.canvas.width,
-      this.ctx.canvas.height
-    );
+    this.titleScreen = constructTitleScreen();
+    this.gameScreen = constructGameScreen();
+    this.curMode = this.titleScreen;
+    document.addEventListener("click", (e: MouseEvent) => {
+      const mousePosition = this.mouse(e);
+      const btn = this.buttonClicked(mousePosition);
+
+      if (btn) {
+        console.log(btn.text);
+        const event = ConstructEvent(btn.eventType(), btn);
+        this.eventBus.send(event);
+      }
+    });
   }
 
-  drawTitleScreenUi(): void {
-    this.titleScreen.draw(this.ctx);
+  public setMode(mode: UIMode) {
+    switch (mode) {
+      case (UIMode.TitleScreen):
+        this.curMode = this.titleScreen;
+        break;
+      case (UIMode.InGame):
+        this.curMode = this.gameScreen;
+        break;
+    }
   }
 
-  resize(): void {
-    this.titleScreen.height = Math.floor(this.ctx.canvas.height * 0.4);
+  resize(ctxWidth: number, ctxHeight: number): void {
+    // TitleScreen
+    this.titleScreen.height = Math.floor(ctxHeight * 0.4);
     this.titleScreen.width = Math.floor(this.titleScreen.height * 0.5);
     this.titleScreen.x = Math.floor(
-      this.ctx.canvas.width / 2 - this.titleScreen.width / 2
+      (ctxWidth / 2) - (this.titleScreen.width / 2)
     );
     this.titleScreen.y = Math.floor(
-      this.ctx.canvas.height / 2 - this.titleScreen.height / 2
+      ctxHeight / 2 - this.titleScreen.height / 2
     );
 
     this.titleScreen.resize();
+
+    // Game Screen
+    this.gameScreen.height = Math.floor(ctxHeight * 0.1);
+    this.gameScreen.width = ctxWidth - 6;
+    this.gameScreen.x = 3;
+    this.gameScreen.y = ctxHeight - this.gameScreen.height;
+
+    this.gameScreen.resize();
   }
+
+  private buttonClicked(mouse: { x: number; y: number }): Button | null {
+    if (!this.curMode.contains(mouse.x, mouse.y)) {
+      return null;
+    }
+
+    for (const child of this.curMode.children) {
+      const btn = this.checkChildren(child, mouse.x, mouse.y);
+      if (btn !== null) {
+        return btn;
+      }
+    }
+
+    return null;
+  }
+
+  private checkChildren(node: UIElement, x: number, y: number): Button | null {
+    if (!node.contains(x, y)) {
+      return null;
+    }
+
+    if (node instanceof Button && node.containsPoint(x, y)) {
+      return node;
+    }
+
+    for (const child of node.children) {
+      const btn = this.checkChildren(child, x, y);
+      if (btn !== null) {
+        return btn;
+      }
+    }
+
+    return null;
+  }
+
+  private mouse(e: MouseEvent): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    return { x, y };
+  }
+
 }
 
 class UIElement {
@@ -268,12 +383,17 @@ class UIElement {
     this.children = [];
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    this.children.forEach((child) => child.draw(ctx));
-  }
-
   resize(): void {
     this.children.forEach((child) => child.resize());
+  }
+
+  contains(x: number, y: number): boolean {
+    return (
+      x >= this.x &&
+      x <= this.x + this.width &&
+      y >= this.y &&
+      y <= this.y + this.height
+    );
   }
 }
 
@@ -336,32 +456,15 @@ class Panel extends UIElement {
 
 class Button extends UIElement {
   text: string;
+  event: EventType;
 
-  constructor(x: number, y: number, width: number, height: number, text: string) {
+  constructor(x: number, y: number, width: number, height: number, text: string, event: EventType) {
     super(x, y, width, height);
     this.text = text;
+    this.event = event;
   }
 
   resize(): void {
-  }
-
-  draw(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = "white";
-    ctx.beginPath();
-    ctx.rect(this.x, this.y, this.width, this.height);
-    ctx.stroke();
-
-    const fontSize = Math.round(this.width * 0.1);
-    ctx.fillStyle = "white";
-    ctx.font = `${fontSize}px Arial`;
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    const textX = this.x + this.width / 2;
-    const textY = this.y + this.height / 2;
-
-    ctx.fillText(this.text, textX, textY);
   }
 
   containsPoint(x: number, y: number): boolean {
@@ -371,6 +474,10 @@ class Button extends UIElement {
       y >= this.y &&
       y <= this.y + this.height
     );
+  }
+
+  eventType(): EventType {
+    return this.event;
   }
 }
 
