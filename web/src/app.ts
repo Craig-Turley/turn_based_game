@@ -63,31 +63,60 @@ class Game {
   }
 }
 
+enum Shading {
+  SHADE = "rgba(64, 64, 64, 0.5)",
+  NOSHADE = "",
+}
+
+class Background {
+  private paths = [
+    './assets/jungle_asset_pack/parallax_background/plx-1.png',
+    './assets/jungle_asset_pack/parallax_background/plx-2.png',
+    './assets/jungle_asset_pack/parallax_background/plx-3.png',
+    './assets/jungle_asset_pack/parallax_background/plx-4.png',
+    './assets/jungle_asset_pack/parallax_background/plx-5.png',
+  ];
+  private tilesetPath = "./assets/jungle_asset_pack/jungle_tileset/jungle_tileset.png";
+
+  public layers: CanvasImageSource[];
+  public tileset: CanvasImageSource;
+  public shading: Shading;
+
+  constructor() {
+    const layers: CanvasImageSource[] = [];
+    this.paths.forEach((p) => {
+      const img = new Image();
+      img.src = p;
+      img.onload = () => {
+        layers.push(img);
+      }
+    });
+    this.layers = layers;
+
+    const tileset = new Image();
+    tileset.src = this.tilesetPath;
+    this.tileset = tileset;
+    this.shading = Shading.SHADE;
+  }
+
+  toggleShading() {
+    if (this.shading === Shading.SHADE) {
+      this.shading = Shading.NOSHADE;
+    } else {
+      this.shading = Shading.SHADE;
+    }
+  }
+}
+
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
-  private background = [
-    '../dist/assets/parallax_background/plx-1.png',
-    '../dist/assets/parallax_background/plx-2.png',
-    '../dist/assets/parallax_background/plx-3.png',
-    '../dist/assets/parallax_background/plx-4.png',
-    '../dist/assets/parallax_background/plx-5.png',
-  ];
-  private loadedBackground: CanvasImageSource[];
+  private backGround: Background;
 
   constructor(ctx: CanvasRenderingContext2D, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
-    const loaded: CanvasImageSource[] = [];
-    this.background.forEach((layer) => {
-      const img = new Image();
-      img.src = layer;
-      img.onload = () => {
-        loaded.push(img);
-      }
-    });
-
-    this.loadedBackground = loaded;
+    this.backGround = new Background();
 
     window.addEventListener("resize", () => {
       this.resize();
@@ -113,12 +142,27 @@ class DisplayDriver {
     this.drawBackground();
     this.drawUI(uiState);
   }
-  
+
   private drawBackground() {
-    this.loadedBackground.forEach((layer) => { 
+    this.backGround.layers.forEach((layer) => {
       this.ctx.drawImage(layer, 0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     });
 
+    this.ctx.fillStyle = this.backGround.shading;
+    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+
+    // arbtrary values for offset of grass stage tile
+    const sx = 16;
+    const sy = 224;
+    const sWidth = 159;
+    const sHeight = 31;
+
+    const dx = 0;
+    const dy = this.ctx.canvas.height - sHeight;
+    const dWidth = sWidth;
+    const dHeight = sHeight;
+
+    ctx.drawImage(this.backGround.tileset, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
   }
 
   private drawUI(uiState: UIMode) {
