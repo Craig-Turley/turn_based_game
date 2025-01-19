@@ -27,18 +27,41 @@ function ConstructEvent(eventType: EventType, data: any): event {
   };
 }
 
+class Character {
+  position: Vector;
+
+  constructor(position: Vector) {
+    this.position = position;
+  }
+}
+
+class GameState {
+  team: Character[];
+
+  constructor() {
+    const team: Character[] = [];
+    for (let i = 0; i < 3; i++) {
+      const pos = new Vector(200 + 160 * i, canvas.height - 31);
+      team.push(new Character(pos));
+    }
+    this.team = team;
+  }
+}
+
 class Game {
   private ctx: CanvasRenderingContext2D;
   private eventBus: EventBus;
   private ui: UI;
   private displayDriver: DisplayDriver;
   private uiState: UIMode;
+  private gameState: GameState;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
     this.ui = new UI(this.eventBus);
-    this.displayDriver = new DisplayDriver(this.ctx, this.ui);
+    this.gameState = new GameState();
+    this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
     this.uiState = UIMode.TitleScreen;
 
     requestAnimationFrame(() => {
@@ -68,7 +91,7 @@ enum Shading {
   NOSHADE = "",
 }
 
-class Background {
+class Stage {
   private paths = [
     './assets/jungle_asset_pack/parallax_background/plx-1.png',
     './assets/jungle_asset_pack/parallax_background/plx-2.png',
@@ -76,47 +99,83 @@ class Background {
     './assets/jungle_asset_pack/parallax_background/plx-4.png',
     './assets/jungle_asset_pack/parallax_background/plx-5.png',
   ];
-  private tilesetPath = "./assets/jungle_asset_pack/jungle_tileset/jungle_tileset.png";
 
   public layers: CanvasImageSource[];
-  public tileset: CanvasImageSource;
+  public tileset: Sprite;
   public shading: Shading;
 
   constructor() {
     const layers: CanvasImageSource[] = [];
-    this.paths.forEach((p) => {
-      const img = new Image();
-      img.src = p;
-      img.onload = () => {
-        layers.push(img);
-      }
+    this.paths.forEach(async (path) => {
+      const img = await this.loadImage(path);
+      layers.push(img);
     });
     this.layers = layers;
-
-    const tileset = new Image();
-    tileset.src = this.tilesetPath;
-    this.tileset = tileset;
+    this.tileset = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size);
     this.shading = Shading.SHADE;
   }
 
-  toggleShading() {
-    if (this.shading === Shading.SHADE) {
-      this.shading = Shading.NOSHADE;
-    } else {
-      this.shading = Shading.SHADE;
-    }
+  private loadImage(path: string): Promise<CanvasImageSource> {
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.src = path;
+      img.onload = () => res(img);
+      // @TODO handle this error. Program will blow up if not
+      img.onerror = (err) => rej(err);
+    });
+  }
+
+  public toggleShading() {
+    this.shading = this.shading === Shading.SHADE ? Shading.NOSHADE : Shading.SHADE;
+  }
+}
+
+class Vector {
+  x: number;
+  y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+const Sprites = {
+  StageFloor: {
+    image: "./assets/jungle_asset_pack/jungle_tileset/jungle_tileset.png",
+    start: new Vector(16, 224),
+    size: new Vector(159, 31),
+  },
+  BlueWitch: {},
+  Knight: {},
+  Necromancer: {},
+};
+
+class Sprite {
+  image: CanvasImageSource;
+  start: Vector;
+  size: Vector;
+
+  constructor(path: string, start: Vector, size: Vector) {
+    const img = new Image();
+    img.src = path;
+    this.image = img;
+    this.size = size;
+    this.start = start;
   }
 }
 
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
-  private backGround: Background;
+  private stage: Stage;
+  private gameState: GameState;
 
-  constructor(ctx: CanvasRenderingContext2D, ui: UI) {
+  constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
-    this.backGround = new Background();
+    this.stage = new Stage();
+    this.gameState = gameState;
 
     window.addEventListener("resize", () => {
       this.resize();
@@ -139,30 +198,48 @@ class DisplayDriver {
   draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
-    this.drawBackground();
+    this.drawStage();
+    this.drawCharacters();
     this.drawUI(uiState);
   }
 
-  private drawBackground() {
-    this.backGround.layers.forEach((layer) => {
+  private drawStage(): void {
+    this.stage.layers.forEach((layer) => {
       this.ctx.drawImage(layer, 0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     });
 
-    this.ctx.fillStyle = this.backGround.shading;
+    // this is crazy ngl
+    for (let i = 0; i < 2; i++) {
+      const scale = this.ctx.canvas.width * 0.5 / this.stage.tileset.size.x;
+      const pos = new Vector(i * this.stage.tileset.size.x * scale, this.ctx.canvas.height - this.stage.tileset.size.y * scale);
+      this.drawSprite(this.stage.tileset, pos, scale);
+    }
+
+    this.ctx.fillStyle = this.stage.shading;
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+  }
 
-    // arbtrary values for offset of grass stage tile
-    const sx = 16;
-    const sy = 224;
-    const sWidth = 159;
-    const sHeight = 31;
+  private drawCharacters(): void {
+    this.gameState.team.forEach((character) => {
+      this.ctx.fillStyle = "red";
+      this.ctx.fillRect(character.position.x - 25, character.position.y - 25, 25, 25);
+    });
+  }
 
-    const dx = 0;
-    const dy = this.ctx.canvas.height - sHeight;
-    const dWidth = sWidth;
-    const dHeight = sHeight;
-
-    ctx.drawImage(this.backGround.tileset, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+  private drawSprite(sprite: Sprite, pos: Vector, scale: number): void {
+    const sWidth = sprite.size.x * scale;
+    const sHeight = sprite.size.y * scale;
+    this.ctx.drawImage(
+      sprite.image,
+      sprite.start.x,
+      sprite.start.y,
+      sprite.size.x,
+      sprite.size.y,
+      pos.x,
+      pos.y,
+      sWidth,
+      sHeight,
+    )
   }
 
   private drawUI(uiState: UIMode) {
@@ -185,14 +262,18 @@ class DisplayDriver {
   }
 
   private drawButton(btn: Button) {
-    this.ctx.strokeStyle = "white";
+    this.ctx.fillStyle = "#FFFFF0";
+    this.ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
+
+    this.ctx.strokeStyle = "black";
+    this.ctx.lineWidth = 5;
     this.ctx.beginPath();
     this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
     this.ctx.stroke();
 
-    const fontSize = Math.round(btn.width * 0.1);
-    this.ctx.fillStyle = "white";
-    this.ctx.font = `${fontSize}px Arial`;
+    this.ctx.fillStyle = "black";
+    const fontSize = Math.round(btn.width * 0.08);
+    this.ctx.font = `${fontSize}px "Press Start 2P"`;
 
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
@@ -558,4 +639,3 @@ function main(): void {
 }
 
 main();
-
