@@ -36,6 +36,7 @@ class Character {
 }
 
 class GameState {
+  roomKey: string | null;
   team: Character[];
 
   constructor() {
@@ -45,6 +46,7 @@ class GameState {
       team.push(new Character(pos));
     }
     this.team = team;
+    this.roomKey = null;
   }
 }
 
@@ -168,12 +170,16 @@ class Sprite {
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
+  private aspectRatio: number;
+  private ctxWidth;
+  private ctxHeight;
   private stage: Stage;
   private gameState: GameState;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
+    this.aspectRatio = (16 / 9);
     this.stage = new Stage();
     this.gameState = gameState;
 
@@ -187,20 +193,44 @@ class DisplayDriver {
     const boundingBox = canvas.parentElement!.getBoundingClientRect();
     const devicePixelRatio = window.devicePixelRatio;
 
-    this.ctx.canvas.width = boundingBox.width * devicePixelRatio;
-    this.ctx.canvas.height = boundingBox.height * devicePixelRatio;
+    //TODO adjust the drawble area to remain fixed
+    let width = boundingBox.width * devicePixelRatio;
+    let height = boundingBox.height * devicePixelRatio;
+    this.ctx.canvas.width = width;
+    this.ctx.canvas.height = height;
+
+    const adjustedHeight = Math.round(width / this.aspectRatio);
+    const adjustedWidth = Math.round(height * this.aspectRatio);
+
+    if (Math.abs(height - adjustedHeight) < Math.abs(width - adjustedWidth)) {
+      height = adjustedHeight;
+    } else {
+      width = adjustedWidth;
+    }
+
+    this.ctxWidth = width;
+    this.ctxHeight = height;
+    console.log(this.ctxWidth, this.ctxHeight);
     this.ctx.canvas.style.width = `${boundingBox.width}px`;
     this.ctx.canvas.style.height = `${boundingBox.height}px`;
 
-    this.ui.resize(this.ctx.canvas.width, this.ctx.canvas.height);
+    console.log(this.ctx.canvas.width / this.ctx.canvas.height);
+
+    this.ui.resize(this.ctxWidth, this.ctxHeight);
   }
 
   draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
-    this.drawStage();
-    this.drawCharacters();
-    this.drawUI(uiState);
+    this.drawDebug();
+    // this.drawStage();
+    // this.drawCharacters();
+    // this.drawUI(uiState);
+  }
+
+  private drawDebug() {
+    this.ctx.fillStyle = 'red';
+    this.ctx.fillRect(0, 0, this.ctxWidth, this.ctxHeight);
   }
 
   private drawStage(): void {
@@ -414,6 +444,7 @@ function constructGameScreen(): Panel {
 
 enum UIMode {
   TitleScreen,
+  Waiting,
   InGame,
 }
 
