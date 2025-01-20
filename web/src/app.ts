@@ -170,16 +170,24 @@ class Sprite {
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
-  private aspectRatio: number;
-  private ctxWidth;
-  private ctxHeight;
+  private baseWidth: number;
+  private baseHeight: number;
+  private ctxWidth: number;
+  private ctxHeight: number;
+  private xOffset: number;
+  private yOffset: number;
   private stage: Stage;
   private gameState: GameState;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
-    this.aspectRatio = (16 / 9);
+    this.baseWidth = 16;
+    this.baseHeight = 9;
+    this.ctxWidth = 16;
+    this.ctxHeight = 9;
+    this.xOffset = 0;
+    this.yOffset = 0;
     this.stage = new Stage();
     this.gameState = gameState;
 
@@ -189,32 +197,33 @@ class DisplayDriver {
     this.resize();
   }
 
+  private cX(x: number) {
+    return this.xOffset + x;
+  }
+  
+  private cY(y: number) {
+    return this.yOffset + y;
+  }
+
   private resize(): void {
     const boundingBox = canvas.parentElement!.getBoundingClientRect();
-    const devicePixelRatio = window.devicePixelRatio;
+    this.ctx.canvas.width = boundingBox.width; 
+    this.ctx.canvas.height = boundingBox.height;
 
-    //TODO adjust the drawble area to remain fixed
-    let width = boundingBox.width * devicePixelRatio;
-    let height = boundingBox.height * devicePixelRatio;
-    this.ctx.canvas.width = width;
-    this.ctx.canvas.height = height;
+    let ctxWidth = (boundingBox.width) - ((boundingBox.width) % this.baseWidth);
+    let ctxHeight = (ctxWidth / this.baseWidth) * this.baseHeight;
 
-    const adjustedHeight = Math.round(width / this.aspectRatio);
-    const adjustedWidth = Math.round(height * this.aspectRatio);
-
-    if (Math.abs(height - adjustedHeight) < Math.abs(width - adjustedWidth)) {
-      height = adjustedHeight;
-    } else {
-      width = adjustedWidth;
+    // @TODO make this cleaner. I feel like there's a more concise way of performing this check
+    if (ctxHeight > this.ctx.canvas.height) {
+      ctxHeight = (boundingBox.height) - ((boundingBox.width) % this.baseHeight);
+      ctxWidth = (ctxHeight / this.baseHeight) * this.baseWidth;
     }
 
-    this.ctxWidth = width;
-    this.ctxHeight = height;
-    console.log(this.ctxWidth, this.ctxHeight);
-    this.ctx.canvas.style.width = `${boundingBox.width}px`;
-    this.ctx.canvas.style.height = `${boundingBox.height}px`;
+    this.ctxWidth = ctxWidth;
+    this.ctxHeight = ctxHeight;
 
-    console.log(this.ctx.canvas.width / this.ctx.canvas.height);
+    this.xOffset = Math.floor(Math.abs((this.ctx.canvas.width - this.ctxWidth) / 2));
+    this.yOffset = Math.floor(Math.abs((this.ctx.canvas.height - this.ctxHeight) / 2));
 
     this.ui.resize(this.ctxWidth, this.ctxHeight);
   }
@@ -230,23 +239,23 @@ class DisplayDriver {
 
   private drawDebug() {
     this.ctx.fillStyle = 'red';
-    this.ctx.fillRect(0, 0, this.ctxWidth, this.ctxHeight);
+    this.ctx.fillRect(this.cX(0), this.cY(0), this.cX(this.ctxWidth), this.cY(this.ctxHeight));
   }
 
   private drawStage(): void {
     this.stage.layers.forEach((layer) => {
-      this.ctx.drawImage(layer, 0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+      this.ctx.drawImage(layer, 0, 0, this.ctxWidth, this.ctxHeight);
     });
 
     // this is crazy ngl
     for (let i = 0; i < 2; i++) {
-      const scale = this.ctx.canvas.width * 0.5 / this.stage.tileset.size.x;
-      const pos = new Vector(i * this.stage.tileset.size.x * scale, this.ctx.canvas.height - this.stage.tileset.size.y * scale);
+      const scale = this.ctxWidth * 0.5 / this.stage.tileset.size.x;
+      const pos = new Vector(i * this.stage.tileset.size.x * scale, this.ctxHeight- this.stage.tileset.size.y * scale);
       this.drawSprite(this.stage.tileset, pos, scale);
     }
 
     this.ctx.fillStyle = this.stage.shading;
-    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    this.ctx.fillRect(0, 0, this.ctxWidth, this.ctxHeight);
   }
 
   private drawCharacters(): void {
