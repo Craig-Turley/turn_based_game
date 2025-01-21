@@ -104,6 +104,7 @@ class Stage {
 
   public layers: CanvasImageSource[];
   public floortile: Sprite;
+  public undergroundtile: Sprite;
   public shading: Shading;
 
   constructor() {
@@ -114,6 +115,7 @@ class Stage {
     });
     this.layers = layers;
     this.floortile = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size);
+    this.undergroundtile = new Sprite(Sprites.Underground.image, Sprites.Underground.start, Sprites.Underground.size);
     this.shading = Shading.SHADE;
   }
 
@@ -145,6 +147,11 @@ class Vector {
 const Sprites = {
   StageFloor: {
     image: "./assets/platforms/tiles/tile_0003.png",
+    start: new Vector(0, 0),
+    size: new Vector(21, 21),
+  },
+  Underground: {
+    image: "./assets/platforms/tiles/tile_0032.png",
     start: new Vector(0, 0),
     size: new Vector(21, 21),
   },
@@ -234,7 +241,7 @@ class DisplayDriver {
     this.scale = Math.min((this.ctxWidth / this.baseWidth), (this.ctxHeight / this.baseHeight));
 
     this.xOffset = Math.floor(Math.abs((this.ctx.canvas.width - this.ctxWidth) / 2));
-    this.yOffset = Math.floor(Math.abs((this.ctx.canvas.height - this.ctxHeight) / 2));
+    // this.yOffset = Math.floor(Math.abs((this.ctx.canvas.height - this.ctxHeight) / 2));
 
     this.ui.resize(this.ctxWidth, this.ctxHeight);
   }
@@ -254,33 +261,30 @@ class DisplayDriver {
   }
 
   private drawStage(): void {
+    // this is the background
     this.stage.layers.forEach((layer) => {
       this.ctx.drawImage(layer, this.cX(0), this.cY(0), this.ctxWidth, this.ctxHeight);
 
       // draw for overflow
       this.ctx.drawImage(layer, this.cX(0) - this.ctxWidth, this.cY(0), this.ctxWidth, this.ctxHeight);
-      this.ctx.drawImage(layer, this.cX(this.ctxWidth), this.cY(0), this.ctxWidth + this.xOffset, this.ctxHeight);
+      this.ctx.drawImage(layer, this.cX(this.ctxWidth), this.cY(0), this.ctxWidth, this.ctxHeight);
     });
-
-    for (let i = 0; i < this.ctxWidth; i += this.stage.floortile.size.x * this.scale) {
-      const pos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
-      this.drawSprite(this.stage.floortile, pos, this.scale);
-    }
-
+ 
+    // im drawing all the way across the bottom of the screen to account for letterboxing
+    // this is the bottom part of the stage btw
     const blockwidth = this.stage.floortile.size.x * this.scale;
-    // left overflow
-    for (let i = this.cX(0) - blockwidth; i > 0 - blockwidth; i -= blockwidth) {
-      const pos = new Vector(i, this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
-      this.drawSprite(this.stage.floortile, pos, this.scale);
+    for (let i = 0 - this.baseWidth * 2; i < this.cX(this.ctxWidth); i += blockwidth) {
+      const floorPos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
+      this.drawSprite(this.stage.floortile, floorPos, this.scale);
+     
+      // underground. not sure about this
+      let k = 0;
+      for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j+= blockwidth) {
+        const undergroundPos = new Vector(this.cX(i), this.ctxHeight + (k * blockwidth));
+        this.drawSprite(this.stage.undergroundtile, undergroundPos, this.scale);
+        k++;
+      } 
     }
-
-    // right overflow
-    for (let i = this.cX(0) + this.ctxWidth; i < this.ctx.canvas.width + blockwidth; i += blockwidth) {
-      const pos = new Vector(i, this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
-      this.drawSprite(this.stage.floortile, pos, this.scale);
-    }
-
-    // bottom overflow next
 
     this.ctx.fillStyle = this.stage.shading;
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
