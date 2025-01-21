@@ -54,9 +54,9 @@ class Game {
   private ctx: CanvasRenderingContext2D;
   private eventBus: EventBus;
   private ui: UI;
-  private displayDriver: DisplayDriver;
   private uiState: UIMode;
   private gameState: GameState;
+  public displayDriver: DisplayDriver;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -103,7 +103,7 @@ class Stage {
   ];
 
   public layers: CanvasImageSource[];
-  public tileset: Sprite;
+  public floortile: Sprite;
   public shading: Shading;
 
   constructor() {
@@ -113,7 +113,7 @@ class Stage {
       layers.push(img);
     });
     this.layers = layers;
-    this.tileset = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size);
+    this.floortile = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size);
     this.shading = Shading.SHADE;
   }
 
@@ -144,9 +144,9 @@ class Vector {
 
 const Sprites = {
   StageFloor: {
-    image: "./assets/jungle_asset_pack/jungle_tileset/jungle_tileset.png",
-    start: new Vector(16, 224),
-    size: new Vector(159, 31),
+    image: "./assets/platforms/tiles/tile_0003.png",
+    start: new Vector(0, 0),
+    size: new Vector(21, 21),
   },
   BlueWitch: {},
   Knight: {},
@@ -176,16 +176,18 @@ class DisplayDriver {
   private ctxHeight: number;
   private xOffset: number;
   private yOffset: number;
+  private scale: number;
   private stage: Stage;
   private gameState: GameState;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
-    this.baseWidth = 16;
-    this.baseHeight = 9;
+    this.baseWidth = 320;
+    this.baseHeight = 180;
     this.ctxWidth = 16;
     this.ctxHeight = 9;
+    this.scale = 1;
     this.xOffset = 0;
     this.yOffset = 0;
     this.stage = new Stage();
@@ -197,17 +199,25 @@ class DisplayDriver {
     this.resize();
   }
 
-  private cX(x: number) {
+  public cX(x: number) {
     return this.xOffset + x;
   }
-  
-  private cY(y: number) {
+
+  public cY(y: number) {
     return this.yOffset + y;
+  }
+
+  public rX(x: number) {
+    return x - this.xOffset;
+  }
+
+  public rY(y: number) {
+    return y - this.yOffset;
   }
 
   private resize(): void {
     const boundingBox = canvas.parentElement!.getBoundingClientRect();
-    this.ctx.canvas.width = boundingBox.width; 
+    this.ctx.canvas.width = boundingBox.width;
     this.ctx.canvas.height = boundingBox.height;
 
     let ctxWidth = (boundingBox.width) - ((boundingBox.width) % this.baseWidth);
@@ -215,12 +225,13 @@ class DisplayDriver {
 
     // @TODO make this cleaner. I feel like there's a more concise way of performing this check
     if (ctxHeight > this.ctx.canvas.height) {
-      ctxHeight = (boundingBox.height) - ((boundingBox.width) % this.baseHeight);
+      ctxHeight = (boundingBox.height) - ((boundingBox.height) % this.baseHeight);
       ctxWidth = (ctxHeight / this.baseHeight) * this.baseWidth;
     }
 
     this.ctxWidth = ctxWidth;
     this.ctxHeight = ctxHeight;
+    this.scale = Math.min((this.ctxWidth / this.baseWidth), (this.ctxHeight / this.baseHeight));
 
     this.xOffset = Math.floor(Math.abs((this.ctx.canvas.width - this.ctxWidth) / 2));
     this.yOffset = Math.floor(Math.abs((this.ctx.canvas.height - this.ctxHeight) / 2));
@@ -231,10 +242,10 @@ class DisplayDriver {
   draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
-    this.drawDebug();
-    // this.drawStage();
-    // this.drawCharacters();
-    // this.drawUI(uiState);
+    // this.drawDebug();
+    this.drawStage();
+    this.drawCharacters();
+    this.drawUI(uiState);
   }
 
   private drawDebug() {
@@ -244,25 +255,42 @@ class DisplayDriver {
 
   private drawStage(): void {
     this.stage.layers.forEach((layer) => {
-      this.ctx.drawImage(layer, 0, 0, this.ctxWidth, this.ctxHeight);
+      this.ctx.drawImage(layer, this.cX(0), this.cY(0), this.ctxWidth, this.ctxHeight);
+
+      // draw for overflow
+      this.ctx.drawImage(layer, this.cX(0) - this.ctxWidth, this.cY(0), this.ctxWidth, this.ctxHeight);
+      this.ctx.drawImage(layer, this.cX(this.ctxWidth), this.cY(0), this.ctxWidth + this.xOffset, this.ctxHeight);
     });
 
-    // this is crazy ngl
-    for (let i = 0; i < 2; i++) {
-      const scale = this.ctxWidth * 0.5 / this.stage.tileset.size.x;
-      const pos = new Vector(i * this.stage.tileset.size.x * scale, this.ctxHeight- this.stage.tileset.size.y * scale);
-      this.drawSprite(this.stage.tileset, pos, scale);
+    for (let i = 0; i < this.ctxWidth; i += this.stage.floortile.size.x * this.scale) {
+      const pos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
+      this.drawSprite(this.stage.floortile, pos, this.scale);
     }
 
+    const blockwidth = this.stage.floortile.size.x * this.scale;
+    // left overflow
+    for (let i = this.cX(0) - blockwidth; i > 0 - blockwidth; i -= blockwidth) {
+      const pos = new Vector(i, this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
+      this.drawSprite(this.stage.floortile, pos, this.scale);
+    }
+
+    // right overflow
+    for (let i = this.cX(0) + this.ctxWidth; i < this.ctx.canvas.width + blockwidth; i += blockwidth) {
+      const pos = new Vector(i, this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
+      this.drawSprite(this.stage.floortile, pos, this.scale);
+    }
+
+    // bottom overflow next
+
     this.ctx.fillStyle = this.stage.shading;
-    this.ctx.fillRect(0, 0, this.ctxWidth, this.ctxHeight);
+    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
   }
 
   private drawCharacters(): void {
-    this.gameState.team.forEach((character) => {
-      this.ctx.fillStyle = "red";
-      this.ctx.fillRect(character.position.x - 25, character.position.y - 25, 25, 25);
-    });
+    // this.gameState.team.forEach((character) => {
+    //   this.ctx.fillStyle = "red";
+    //   this.ctx.fillRect(character.position.x - 25, character.position.y - 25, 25, 25);
+    // });
   }
 
   private drawSprite(sprite: Sprite, pos: Vector, scale: number): void {
@@ -302,12 +330,12 @@ class DisplayDriver {
 
   private drawButton(btn: Button) {
     this.ctx.fillStyle = "#FFFFF0";
-    this.ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
+    this.ctx.fillRect(this.cX(btn.x), this.cY(btn.y), btn.width, btn.height);
 
     this.ctx.strokeStyle = "black";
     this.ctx.lineWidth = 5;
     this.ctx.beginPath();
-    this.ctx.rect(btn.x, btn.y, btn.width, btn.height);
+    this.ctx.rect(this.cX(btn.x), this.cY(btn.y), btn.width, btn.height);
     this.ctx.stroke();
 
     this.ctx.fillStyle = "black";
@@ -320,12 +348,12 @@ class DisplayDriver {
     const textX = btn.x + btn.width / 2;
     const textY = btn.y + btn.height / 2;
 
-    this.ctx.fillText(btn.text, textX, textY);
+    this.ctx.fillText(btn.text, this.cX(textX), this.cY(textY));
   }
 }
 
 class EventBus {
-  private bus: Game;
+  public bus: Game;
 
   constructor(bus: Game) {
     this.bus = bus;
@@ -548,15 +576,16 @@ class UI {
     return null;
   }
 
+  // so readable
   private mouse(e: MouseEvent): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
 
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    // im ngl I feel like this access to the display driver function is incorrect but if I didn't do it this way,
+    // then my code would look like a react project that passes down a piece of data 5 layers
+    const x = this.eventBus.bus.displayDriver.rX((e.clientX - rect.left) * (canvas.width / rect.width));
+    const y = this.eventBus.bus.displayDriver.rY((e.clientY - rect.top) * (canvas.height / rect.height));
 
-    return { x, y };
+    return { x: x, y: y };
   }
 
 }
