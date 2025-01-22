@@ -504,9 +504,10 @@ function constructGameScreen(): Panel {
     0,
     0,
     Alignment.HORIZONTAL,
-    10
+    10,
   );
 
+  const screens = Map<number, UIElement[]>
   mainScreenButtons.forEach((btn) => {
     const buttonWidth = mainPanel.width * 0.8;
     const buttonHeight =
@@ -677,6 +678,7 @@ enum BorderColor {
 }
 
 class Panel extends UIElement {
+  public screens: Map<number, UIElement[]> | null;
   public alignment: Alignment;
   public margin: number;
   public borderWidth: number;
@@ -690,6 +692,7 @@ class Panel extends UIElement {
     height: number,
     alignment: Alignment,
     margin: number,
+    screens: Map<number, UIElement[]> | null,
     borderWidth: number = 0,
     borderColor: string = "",
     backgroundColor: string = ""
@@ -700,6 +703,7 @@ class Panel extends UIElement {
     this.borderWidth = borderWidth;
     this.borderColor = borderColor;
     this.backgroundColor = backgroundColor;
+    this.screens = screens;
   }
 
   resize(): void {
@@ -734,6 +738,10 @@ class Panel extends UIElement {
 
   addChild(child: UIElement): void {
     this.children.push(child);
+  }
+
+  addScreen(id: number, screen: UIElement): void {
+    this.screens.set(id, screen);
   }
 }
 
