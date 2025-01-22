@@ -28,12 +28,14 @@ function ConstructEvent(eventType: EventType, data: any): event {
 }
 
 class Character {
+  public sprite: Sprite;
   public position: Vector;
   public health: number;
   public attack: number;
   public defense: number;
 
-  constructor(position: Vector, health: number, attack: number, defense: number) {
+  constructor(sprite: Sprite, position: Vector, health: number, attack: number, defense: number) {
+    this.sprite = sprite;
     this.position = position;
     this.health = health;
     this.attack = attack;
@@ -45,11 +47,13 @@ class GameState {
   roomKey: string | null;
   team: Character[];
 
-  constructor() {
+  constructor(width: number, height: number) {
     const team: Character[] = [];
+    const spacing = Math.floor((width / 2) / 3)
     for (let i = 0; i < 3; i++) {
-      const pos = new Vector(200 + 160 * i, canvas.height - 31);
-      team.push(new Character(pos, 1, 1, 1));
+      const pos = new Vector(spacing * (i + 1), height - Sprites.StageFloor.size.y);
+      const sprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size);
+      team.push(new Character(sprite, pos, 1, 1, 1));
     }
     this.team = team;
     this.roomKey = null;
@@ -68,7 +72,7 @@ class Game {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
     this.ui = new UI(this.eventBus);
-    this.gameState = new GameState();
+    this.gameState = new GameState(320, 180);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
     this.uiState = UIMode.TitleScreen;
 
@@ -162,7 +166,11 @@ const Sprites = {
     size: new Vector(21, 21),
   },
   BlueWitch: {},
-  Knight: {},
+  Knight: {
+    image: "./assets/knight/color_1/outline/png_sheets/_idle.png",
+    start: new Vector(0, 0),
+    size: new Vector(120, 80),
+  },
   Necromancer: {},
 };
 
@@ -296,13 +304,13 @@ class DisplayDriver {
     const blockwidth = this.stage.floortile.size.x * this.scale;
     for (let i = 0 - this.baseWidth * 2; i < this.cX(this.ctxWidth); i += blockwidth) {
       const floorPos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
-      this.drawSprite(this.stage.floortile, floorPos, this.scale);
+      this.drawSprite(this.stage.floortile, floorPos);
 
       // underground. not sure about this
       let k = 0;
       for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j += blockwidth) {
         const undergroundPos = new Vector(this.cX(i), this.ctxHeight + (k * blockwidth));
-        this.drawSprite(this.stage.undergroundtile, undergroundPos, this.scale);
+        this.drawSprite(this.stage.undergroundtile, undergroundPos);
         k++;
       }
     }
@@ -312,15 +320,15 @@ class DisplayDriver {
   }
 
   private drawCharacters(): void {
-    // this.gameState.team.forEach((character) => {
-    //   this.ctx.fillStyle = "red";
-    //   this.ctx.fillRect(character.position.x - 25, character.position.y - 25, 25, 25);
-    // });
+    this.gameState.team.forEach((character) => {
+      const sPos = new Vector(character.position.x * this.scale, character.position.y * this.scale);
+      this.drawSprite(character.sprite, sPos) 
+    });
   }
 
-  private drawSprite(sprite: Sprite, pos: Vector, scale: number): void {
-    const sWidth = sprite.size.x * scale;
-    const sHeight = sprite.size.y * scale;
+  private drawSprite(sprite: Sprite, pos: Vector): void {
+    const sWidth = sprite.size.x * this.scale;
+    const sHeight = sprite.size.y * this.scale;
     this.ctx.drawImage(
       sprite.image,
       sprite.start.x,
@@ -448,6 +456,7 @@ function constructTitleScreen(): Panel {
     Alignment.VERTICAL,
     10,
     BorderWidth.Med,
+    null
   );
 
   mainScreenButtons.forEach((btn) => {
@@ -505,6 +514,8 @@ function constructGameScreen(): Panel {
     0,
     Alignment.HORIZONTAL,
     10,
+    BorderWidth.Med,
+    null,
   );
 
   const screens = Map<number, UIElement[]>
@@ -692,8 +703,8 @@ class Panel extends UIElement {
     height: number,
     alignment: Alignment,
     margin: number,
-    screens: Map<number, UIElement[]> | null,
     borderWidth: number = 0,
+    screens: Map<number, UIElement[]> | null,
     borderColor: string = "",
     backgroundColor: string = ""
   ) {
@@ -740,9 +751,9 @@ class Panel extends UIElement {
     this.children.push(child);
   }
 
-  addScreen(id: number, screen: UIElement): void {
-    this.screens.set(id, screen);
-  }
+  // addScreen(id: number, screen: UIElement[]): void {
+  //   this.screens.set(id, screen);
+  // }
 }
 
 class Button extends UIElement {
