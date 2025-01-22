@@ -28,10 +28,16 @@ function ConstructEvent(eventType: EventType, data: any): event {
 }
 
 class Character {
-  position: Vector;
+  public position: Vector;
+  public health: number;
+  public attack: number;
+  public defense: number;
 
-  constructor(position: Vector) {
+  constructor(position: Vector, health: number, attack: number, defense: number) {
     this.position = position;
+    this.health = health;
+    this.attack = attack;
+    this.defense = defense;
   }
 }
 
@@ -43,7 +49,7 @@ class GameState {
     const team: Character[] = [];
     for (let i = 0; i < 3; i++) {
       const pos = new Vector(200 + 160 * i, canvas.height - 31);
-      team.push(new Character(pos));
+      team.push(new Character(pos, 1, 1, 1));
     }
     this.team = team;
     this.roomKey = null;
@@ -210,6 +216,7 @@ class DisplayDriver {
     return this.xOffset + x;
   }
 
+  // not using this atm might delete later
   public cY(y: number) {
     return this.yOffset + y;
   }
@@ -218,6 +225,7 @@ class DisplayDriver {
     return x - this.xOffset;
   }
 
+  // ditto cY
   public rY(y: number) {
     return y - this.yOffset;
   }
@@ -226,6 +234,17 @@ class DisplayDriver {
     const boundingBox = canvas.parentElement!.getBoundingClientRect();
     this.ctx.canvas.width = boundingBox.width;
     this.ctx.canvas.height = boundingBox.height;
+
+    // the game will break if it is too small. this ensures it wont brick the game
+    // if the user decides to, for some unkown reason, make their screen smaller than
+    // 320px x 180px
+    if (this.ctx.canvas.width < this.baseWidth || this.ctx.canvas.height < this.baseHeight) {
+      this.ctx.canvas.width = this.baseWidth;
+      this.ctx.canvas.height = this.baseHeight;
+      this.ctxWidth = this.baseWidth;
+      this.ctxHeight = this.baseHeight;
+      return
+    }
 
     let ctxWidth = (boundingBox.width) - ((boundingBox.width) % this.baseWidth);
     let ctxHeight = (ctxWidth / this.baseWidth) * this.baseHeight;
@@ -248,6 +267,8 @@ class DisplayDriver {
 
   draw(uiState: UIMode): void {
     this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    // for future referce just incase I decide to add a Y offset 
+    // this is the hex for the background color => #afdfcb
 
     // this.drawDebug();
     this.drawStage();
@@ -269,21 +290,21 @@ class DisplayDriver {
       this.ctx.drawImage(layer, this.cX(0) - this.ctxWidth, this.cY(0), this.ctxWidth, this.ctxHeight);
       this.ctx.drawImage(layer, this.cX(this.ctxWidth), this.cY(0), this.ctxWidth, this.ctxHeight);
     });
- 
+
     // im drawing all the way across the bottom of the screen to account for letterboxing
     // this is the bottom part of the stage btw
     const blockwidth = this.stage.floortile.size.x * this.scale;
     for (let i = 0 - this.baseWidth * 2; i < this.cX(this.ctxWidth); i += blockwidth) {
       const floorPos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
       this.drawSprite(this.stage.floortile, floorPos, this.scale);
-     
+
       // underground. not sure about this
       let k = 0;
-      for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j+= blockwidth) {
+      for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j += blockwidth) {
         const undergroundPos = new Vector(this.cX(i), this.ctxHeight + (k * blockwidth));
         this.drawSprite(this.stage.undergroundtile, undergroundPos, this.scale);
         k++;
-      } 
+      }
     }
 
     this.ctx.fillStyle = this.stage.shading;
@@ -316,9 +337,13 @@ class DisplayDriver {
   private drawUI(uiState: UIMode) {
     switch (uiState) {
       case UIMode.TitleScreen:
+        this.drawPanel(this.ui.titleScreen);
+
         this.ui.titleScreen.children.forEach((child) => {
           if (child instanceof Button) {
             this.drawButton(child);
+          } else if (child instanceof Panel) {
+            this.drawPanel(child)
           }
         });
         break;
@@ -353,6 +378,16 @@ class DisplayDriver {
     const textY = btn.y + btn.height / 2;
 
     this.ctx.fillText(btn.text, this.cX(textX), this.cY(textY));
+  }
+
+  private drawPanel(pnl: Panel) {
+    this.ctx.fillStyle = pnl.backgroundColor;
+    this.ctx.fillRect(this.cX(pnl.x), this.cY(pnl.y), pnl.width, pnl.height)
+
+    this.ctx.strokeStyle = pnl.backgroundColor;
+    this.ctx.lineWidth = pnl.borderWidth;
+    this.ctx.beginPath();
+    this.ctx.rect(this.cX(pnl.x), this.cY(pnl.y), pnl.width, pnl.height);
   }
 }
 
@@ -411,7 +446,8 @@ function constructTitleScreen(): Panel {
     0,
     0,
     Alignment.VERTICAL,
-    10
+    10,
+    BorderWidth.Med,
   );
 
   mainScreenButtons.forEach((btn) => {
@@ -628,9 +664,24 @@ enum Alignment {
   HORIZONTAL = "Horizontal",
 }
 
+enum BackgroundColor {
+  IvoryWhite = "#FFFFF0"
+}
+
+enum BorderWidth {
+  Med = 5
+}
+
+enum BorderColor {
+  Black = "black"
+}
+
 class Panel extends UIElement {
-  alignment: Alignment;
-  margin: number;
+  public alignment: Alignment;
+  public margin: number;
+  public borderWidth: number;
+  public borderColor: string;
+  public backgroundColor: string;
 
   constructor(
     x: number,
@@ -638,11 +689,17 @@ class Panel extends UIElement {
     width: number,
     height: number,
     alignment: Alignment,
-    margin: number
+    margin: number,
+    borderWidth: number = 0,
+    borderColor: string = "",
+    backgroundColor: string = ""
   ) {
     super(x, y, width, height);
     this.alignment = alignment;
     this.margin = margin;
+    this.borderWidth = borderWidth;
+    this.borderColor = borderColor;
+    this.backgroundColor = backgroundColor;
   }
 
   resize(): void {
