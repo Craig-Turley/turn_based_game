@@ -47,12 +47,13 @@ class GameState {
   roomKey: string | null;
   team: Character[];
 
-  constructor(width: number, height: number) {
+  constructor(ctxWidth: number, ctxHeight: number) {
     const team: Character[] = [];
-    const spacing = Math.floor((width / 2) / 3)
+    // figure this out
+    const spacing = Math.floor((ctxWidth / 2) * 0.8) / 3;
     for (let i = 0; i < 3; i++) {
-      const pos = new Vector(spacing * (i + 1), height - Sprites.StageFloor.size.y);
       const sprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size);
+      const pos = new Vector(spacing * (i), ctxHeight - Sprites.StageFloor.size.y - sprite.size.y);
       team.push(new Character(sprite, pos, 1, 1, 1));
     }
     this.team = team;
@@ -321,7 +322,9 @@ class DisplayDriver {
 
   private drawCharacters(): void {
     this.gameState.team.forEach((character) => {
-      const sPos = new Vector(character.position.x * this.scale, character.position.y * this.scale);
+      const x = this.cX(character.position.x * this.scale);
+      const y = this.cY(character.position.y * this.scale);
+      const sPos = new Vector(x, y);
       this.drawSprite(character.sprite, sPos) 
     });
   }
