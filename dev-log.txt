@@ -1,0 +1,44 @@
+This is a dev log for personal reasons, feel free to read, but be aware some comments may
+not be understood due to lack of context, as this is only intended for myself to read
+
+@ Dev log
+
+Date: 01/23/2025
+
+  Goals
+
+   * Refactor UI to display appropriate screens and send signals to game to update game state, attack, etc.
+
+  Tasks Worked On:
+
+    1. Slightly refactored the DisplayDriver object to scale only while drawing and keep
+       positions relative to the baseWidth and height of the game
+    
+  Session highlights:  
+    
+    What went well: 
+      * Worked on relative positioning and established a good way to handle each characters position
+
+    What didn't go well: 
+      * Struggled to debug the drawing 
+      * Was not able to start on the UI redesign because of the time spent debugging the drawing issues
+
+  Key learnings:
+
+    * It is easier to keep positions relative to one ratio and scale only while drawing
+
+  Random thoughts: 
+
+    * Even though the DisplayDriver keeps scales during drawing and keeps everything relative to the targets
+      aspect ratio, the UI cannot function this way. I want the UI to be adaptive to the users screen to allow
+      for seemless adjustment and less potential for missing space. The position will not be fixed to the 
+      current resolution of the target canvas rather it will change relative to the full canvas. However, the
+      size of each element might be fixed relative to the target canvas. Not sure we will see
+
+  Next steps:
+
+    * Continue to work on UI redesign - this will allow the game play to start being worked on
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Build a full team with all the characters planned in the game (only 3 for now)
+
+

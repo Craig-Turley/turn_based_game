@@ -49,11 +49,11 @@ class GameState {
 
   constructor(ctxWidth: number, ctxHeight: number) {
     const team: Character[] = [];
-    // figure this out
-    const spacing = Math.floor((ctxWidth / 2) * 0.8) / 3;
-    for (let i = 0; i < 3; i++) {
-      const sprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size);
-      const pos = new Vector(spacing * (i), ctxHeight - Sprites.StageFloor.size.y - sprite.size.y);
+    // figure this out - (update) alright I think I did - (update) yeah no I didn't
+    const spacing = Math.floor((ctxWidth / 2) / 4);
+    for (let i = 1; i <= 3; i++) {
+      const sprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size, Sprites.Knight.offset, Sprites.Knight.id);
+      const pos = new Vector((spacing * i), ctxHeight - Sprites.StageFloor.size.y - sprite.size.y);
       team.push(new Character(sprite, pos, 1, 1, 1));
     }
     this.team = team;
@@ -125,8 +125,8 @@ class Stage {
       layers.push(img);
     });
     this.layers = layers;
-    this.floortile = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size);
-    this.undergroundtile = new Sprite(Sprites.Underground.image, Sprites.Underground.start, Sprites.Underground.size);
+    this.floortile = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size, Sprites.StageFloor.offset, Sprites.StageFloor.id);
+    this.undergroundtile = new Sprite(Sprites.Underground.image, Sprites.Underground.start, Sprites.Underground.size, Sprites.Underground.offset, Sprites.Underground.id);
     this.shading = Shading.SHADE;
   }
 
@@ -155,23 +155,37 @@ class Vector {
   }
 }
 
+enum SpriteID {
+  Knight,
+  BlueWitch,
+  Necromancer,
+  StageFloor,
+  Underground,
+}
+
 const Sprites = {
   StageFloor: {
     image: "./assets/platforms/tiles/tile_0003.png",
     start: new Vector(0, 0),
     size: new Vector(21, 21),
+    offset: new Vector(0, 0),
+    id: SpriteID.StageFloor,
   },
   Underground: {
     image: "./assets/platforms/tiles/tile_0032.png",
     start: new Vector(0, 0),
     size: new Vector(21, 21),
+    offset: new Vector(0, 0),
+    id: SpriteID.Underground,
   },
-  BlueWitch: {},
   Knight: {
     image: "./assets/knight/color_1/outline/png_sheets/_idle.png",
     start: new Vector(0, 0),
     size: new Vector(120, 80),
+    offset: new Vector(0, 0),
+    id: SpriteID.Knight,
   },
+  BlueWitch: {},
   Necromancer: {},
 };
 
@@ -179,13 +193,17 @@ class Sprite {
   image: CanvasImageSource;
   start: Vector;
   size: Vector;
+  offset: Vector;
+  id: SpriteID;
 
-  constructor(path: string, start: Vector, size: Vector) {
+  constructor(path: string, start: Vector, size: Vector, offset: Vector, id: SpriteID) {
     const img = new Image();
     img.src = path;
     this.image = img;
     this.size = size;
     this.start = start;
+    this.offset = offset;
+    this.id = id;
   }
 }
 
@@ -298,19 +316,35 @@ class DisplayDriver {
       // draw for overflow
       this.ctx.drawImage(layer, this.cX(0) - this.ctxWidth, this.cY(0), this.ctxWidth, this.ctxHeight);
       this.ctx.drawImage(layer, this.cX(this.ctxWidth), this.cY(0), this.ctxWidth, this.ctxHeight);
+
+      // debug
+      // this.ctx.strokeStyle = "black";
+      // this.ctx.lineWidth = 5;
+      // this.ctx.beginPath();
+      // this.ctx.rect(this.cX(0), this.cY(0), this.ctxWidth, this.ctxHeight);
+      // this.ctx.stroke();
+
+      // this.ctx.beginPath();
+      // this.ctx.moveTo(this.cX(Math.floor(this.ctxWidth / 2)), 0);
+      // this.ctx.lineTo(this.cX(Math.floor(this.ctxWidth / 2)), this.ctxHeight);
+      // this.ctx.stroke();
+
+      // this.ctx.beginPath();
+      // this.ctx.moveTo(this.cX(Math.floor(this.ctxWidth / 4)), 0);
+      // this.ctx.lineTo(this.cX(Math.floor(this.ctxWidth / 4)), this.ctxHeight);
+      // this.ctx.stroke();
     });
 
     // im drawing all the way across the bottom of the screen to account for letterboxing
     // this is the bottom part of the stage btw
-    const blockwidth = this.stage.floortile.size.x * this.scale;
+    const blockwidth = this.stage.floortile.size.x;
     for (let i = 0 - this.baseWidth * 2; i < this.cX(this.ctxWidth); i += blockwidth) {
-      const floorPos = new Vector(this.cX(i), this.cY(this.ctxHeight - this.stage.floortile.size.y * this.scale));
+      const floorPos = new Vector(i, this.baseHeight - this.stage.floortile.size.y);
       this.drawSprite(this.stage.floortile, floorPos);
-
       // underground. not sure about this
       let k = 0;
       for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j += blockwidth) {
-        const undergroundPos = new Vector(this.cX(i), this.ctxHeight + (k * blockwidth));
+        const undergroundPos = new Vector(this.cX(i), this.baseHeight + (k * blockwidth));
         this.drawSprite(this.stage.undergroundtile, undergroundPos);
         k++;
       }
@@ -321,28 +355,49 @@ class DisplayDriver {
   }
 
   private drawCharacters(): void {
-    this.gameState.team.forEach((character) => {
-      const x = this.cX(character.position.x * this.scale);
-      const y = this.cY(character.position.y * this.scale);
+    this.gameState.team.forEach((character, i) => {
+      const x = character.position.x;
+      const y = character.position.y;
       const sPos = new Vector(x, y);
-      this.drawSprite(character.sprite, sPos) 
+      this.drawSprite(character.sprite, sPos)
     });
   }
 
   private drawSprite(sprite: Sprite, pos: Vector): void {
-    const sWidth = sprite.size.x * this.scale;
-    const sHeight = sprite.size.y * this.scale;
+    const x = this.cX(pos.x * this.scale - Math.floor(sprite.size.x * this.scale / 2));
+    const y = this.cY(pos.y * this.scale);
+    const width = sprite.size.x * this.scale;
+    const height = sprite.size.y * this.scale;
     this.ctx.drawImage(
       sprite.image,
       sprite.start.x,
       sprite.start.y,
       sprite.size.x,
       sprite.size.y,
-      pos.x,
-      pos.y,
-      sWidth,
-      sHeight,
-    )
+      x,
+      y,
+      width,
+      height,
+    );
+
+    // //debug
+    // if (sprite.id !== SpriteID.Knight) {
+    //   return;
+    // }
+    //
+    // console.log(`Sprite ID: ${sprite.id}, Width: ${width}, Position: (${x}, ${y})`);
+    //
+    // this.ctx.beginPath();
+    // this.ctx.strokeStyle = 'red';
+    // this.ctx.rect(x, y, width, height); // No need to use cX for dimensions
+    // this.ctx.stroke();
+    //
+    // const centerX = x + width / 2;
+    // this.ctx.beginPath();
+    // this.ctx.moveTo(centerX, y); // Center line start
+    // this.ctx.lineTo(centerX, y + height); // Center line end
+    // this.ctx.stroke();
+
   }
 
   private drawUI(uiState: UIMode) {
