@@ -48,17 +48,40 @@ class GameState {
   team: Character[];
 
   constructor(ctxWidth: number, ctxHeight: number) {
-    const team: Character[] = [];
-    // figure this out - (update) alright I think I did - (update) yeah no I didn't
-    const spacing = Math.floor((ctxWidth / 2) / 4);
-    for (let i = 1; i <= 3; i++) {
-      const sprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size, Sprites.Knight.offset, Sprites.Knight.id);
-      const pos = new Vector((spacing * i), ctxHeight - Sprites.StageFloor.size.y - sprite.size.y);
-      team.push(new Character(sprite, pos, 1, 1, 1));
-    }
-    this.team = team;
+    // const team: Character[] = [];
+    // // figure this out - (update) alright I think I did - (update) yeah no I didn't
+    // const spacing = Math.floor((ctxWidth / 2) / 4);
+    // for (let i = 1; i <= 3; i++) {
+    //   const sprite = new Sprite(Sprites.Necromancer.image, Sprites.Necromancer.start, Sprites.Necromancer.size, Sprites.Necromancer.offset, Sprites.Necromancer.id);
+    //   const pos = new Vector((spacing * i), ctxHeight - Sprites.StageFloor.size.y - sprite.size.y);
+    //   team.push(new Character(sprite, pos, 1, 1, 1));
+    // }
+    this.team = this.constructTeam(ctxWidth, ctxHeight);
+    // this.team = this.constructTeam(ctxWidth, ctxHeight);
     this.roomKey = null;
+    }
+
+  constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
+    const team: Character[] = [];
+    const spacing = Math.floor((ctxWidth / 2) / 4);
+
+    const necromancerSprite = new Sprite(Sprites.Necromancer.image, Sprites.Necromancer.start, Sprites.Necromancer.size, Sprites.Necromancer.offset, Sprites.Necromancer.id);
+    const necromancerPos = new Vector(spacing * 1, ctxHeight - Sprites.StageFloor.size.y - necromancerSprite.size.y);
+    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, 2)); 
+
+    const witchSprite = new Sprite(Sprites.BlueWitch.image, Sprites.BlueWitch.start, Sprites.BlueWitch.size, Sprites.BlueWitch.offset, Sprites.BlueWitch.id);
+    const witchPos = new Vector(spacing * 2, ctxHeight - Sprites.StageFloor.size.y - witchSprite.size.y);
+    team.push(new Character(witchSprite, witchPos, 2, 6, 1)); 
+
+    const knightSprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size, Sprites.Knight.offset, Sprites.Knight.id);
+    const knightPos = new Vector(spacing * 3, ctxHeight - Sprites.StageFloor.size.y - knightSprite.size.y);
+    team.push(new Character(knightSprite, knightPos, 5, 3, 4));
+
+    console.log(necromancerPos, witchPos, knightPos);
+
+    return team;
   }
+
 }
 
 class Game {
@@ -112,7 +135,7 @@ class Stage {
     './assets/jungle_asset_pack/parallax_background/plx-4.png',
     './assets/jungle_asset_pack/parallax_background/plx-5.png',
   ];
-
+  
   public layers: CanvasImageSource[];
   public floortile: Sprite;
   public undergroundtile: Sprite;
@@ -185,8 +208,20 @@ const Sprites = {
     offset: new Vector(0, 0),
     id: SpriteID.Knight,
   },
-  BlueWitch: {},
-  Necromancer: {},
+  BlueWitch: {
+    image: "./assets/blue_witch/_idle.png",
+    start: new Vector(0, 0),
+    size: new Vector(32, 40),
+    offset: new Vector(0, 0),
+    id: SpriteID.BlueWitch,
+  },
+  Necromancer: {
+    image: "./assets/necromancer/sprite_sheet.png",
+    start: new Vector(0, 0),
+    size: new Vector(160, 128),
+    offset: new Vector(0, 0),
+    id: SpriteID.Necromancer,
+  },
 };
 
 class Sprite {
@@ -380,8 +415,8 @@ class DisplayDriver {
       height,
     );
 
-    // //debug
-    // if (sprite.id !== SpriteID.Knight) {
+    //debug
+    // if (sprite.id !== SpriteID.BlueWitch) {
     //   return;
     // }
     //
@@ -397,7 +432,7 @@ class DisplayDriver {
     // this.ctx.moveTo(centerX, y); // Center line start
     // this.ctx.lineTo(centerX, y + height); // Center line end
     // this.ctx.stroke();
-
+    //
   }
 
   private drawUI(uiState: UIMode) {

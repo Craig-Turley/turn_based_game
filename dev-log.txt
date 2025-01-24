@@ -42,3 +42,28 @@ Date: 01/23/2025
     * Build a full team with all the characters planned in the game (only 3 for now)
 
 
+Date: 01/24/25
+
+  Goals:
+    
+    * Build team with all characters, and begin animating idle sprites
+
+  Tasks Worked On: 
+    
+    1. Added a team construction function to gameState. Just makes a team of all three available characters
+
+  Session highlights:  
+    
+    What went well: 
+
+    What didn't go well: 
+
+  Key learnings:
+
+  Random thoughts: 
+
+  Next steps:
+
+    * Continue to work on UI redesign - this will allow the game play to start being worked on
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
