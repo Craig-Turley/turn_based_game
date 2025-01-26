@@ -67,3 +67,40 @@ Date: 01/24/25
     * Continue to work on UI redesign - this will allow the game play to start being worked on
     * Start working game loop programming, attacks, chossing targets, etc
     * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
+
+Date: 01/25/25
+
+  Goals:
+    
+    * redesign UI
+
+  Tasks Worked On: 
+    
+    * Rewrote UI components and made the UI positioning relative to target aspect ratio
+      this eliminated a need to recalculate the UI position on evert resize
+
+  Session highlights:  
+    
+    What went well: 
+
+      * I was able to trim the UI components down and make the system much easier to us
+
+    What didn't go well: 
+
+      * I wasn't able to complete the system that changes screens based on user input
+
+  Key learnings:
+
+    * UI is hard :( 
+
+  Random thoughts:
+
+    * Padding on the buttons is only padding bottom. I can maybe consider changing this to another type of 
+      padding but it really doesn't matter all too much. Maybe I will fix this when/if the UI becomes too
+      intense
+
+  Next steps:
+
+    * Add a way to switch subscreens in the current UI system
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images

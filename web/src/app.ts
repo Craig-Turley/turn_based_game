@@ -6,6 +6,7 @@ enum EventType {
   JOIN_ROOM,
   PLAY,
   CHANGE_TEAM,
+  UI_TOGGLE,
   UNUSED,
 }
 
@@ -27,19 +28,24 @@ function ConstructEvent(eventType: EventType, data: any): event {
   };
 }
 
+type Move = {
+  name: String,
+  damage: number, // positive or negative based on healing effects and stuff 
+}
+
 class Character {
   public sprite: Sprite;
   public position: Vector;
   public health: number;
-  public attack: number;
   public defense: number;
+  public attack: Move[];
 
-  constructor(sprite: Sprite, position: Vector, health: number, attack: number, defense: number) {
+  constructor(sprite: Sprite, position: Vector, health: number, defense: number, attack: Move[]) {
     this.sprite = sprite;
     this.position = position;
     this.health = health;
-    this.attack = attack;
     this.defense = defense;
+    this.attack = attack;
   }
 }
 
@@ -59,25 +65,23 @@ class GameState {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
     // this.team = this.constructTeam(ctxWidth, ctxHeight);
     this.roomKey = null;
-    }
+  }
 
   constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
-    const necromancerSprite = new Sprite(Sprites.Necromancer.image, Sprites.Necromancer.start, Sprites.Necromancer.size, Sprites.Necromancer.offset, Sprites.Necromancer.id);
-    const necromancerPos = new Vector(spacing * 1, ctxHeight - Sprites.StageFloor.size.y - necromancerSprite.size.y);
-    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, 2)); 
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id);
+    const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, Characters.Necromancer.moves));
 
-    const witchSprite = new Sprite(Sprites.BlueWitch.image, Sprites.BlueWitch.start, Sprites.BlueWitch.size, Sprites.BlueWitch.offset, Sprites.BlueWitch.id);
-    const witchPos = new Vector(spacing * 2, ctxHeight - Sprites.StageFloor.size.y - witchSprite.size.y);
-    team.push(new Character(witchSprite, witchPos, 2, 6, 1)); 
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id);
+    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    team.push(new Character(witchSprite, witchPos, 2, 6, Characters.BlueWitch.moves));
 
-    const knightSprite = new Sprite(Sprites.Knight.image, Sprites.Knight.start, Sprites.Knight.size, Sprites.Knight.offset, Sprites.Knight.id);
-    const knightPos = new Vector(spacing * 3, ctxHeight - Sprites.StageFloor.size.y - knightSprite.size.y);
-    team.push(new Character(knightSprite, knightPos, 5, 3, 4));
-
-    console.log(necromancerPos, witchPos, knightPos);
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id);
+    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    team.push(new Character(knightSprite, knightPos, 5, 3, Characters.Knight.moves));
 
     return team;
   }
@@ -95,7 +99,7 @@ class Game {
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
-    this.ui = new UI(this.eventBus);
+    this.ui = new UI(this.eventBus, 320, 180);
     this.gameState = new GameState(320, 180);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
     this.uiState = UIMode.TitleScreen;
@@ -116,7 +120,14 @@ class Game {
     switch (event.event) {
       case EventType.CREATE_ROOM:
         this.uiState = UIMode.InGame;
-        this.ui.setMode(this.uiState);
+        this.ui.setMode(this.uiState);;
+        break;
+      case EventType.UI_TOGGLE:
+        const btn: Button = event.data;
+        // TODO clean this up so that we're not searching unessescary (spelling lol) panels
+        btn.toggleIds.forEach((id) => {
+          this.ui.curMode.forEach((child) => child.toggleChild(id));
+        });
         break;
     }
   }
@@ -135,7 +146,7 @@ class Stage {
     './assets/jungle_asset_pack/parallax_background/plx-4.png',
     './assets/jungle_asset_pack/parallax_background/plx-5.png',
   ];
-  
+
   public layers: CanvasImageSource[];
   public floortile: Sprite;
   public undergroundtile: Sprite;
@@ -148,8 +159,8 @@ class Stage {
       layers.push(img);
     });
     this.layers = layers;
-    this.floortile = new Sprite(Sprites.StageFloor.image, Sprites.StageFloor.start, Sprites.StageFloor.size, Sprites.StageFloor.offset, Sprites.StageFloor.id);
-    this.undergroundtile = new Sprite(Sprites.Underground.image, Sprites.Underground.start, Sprites.Underground.size, Sprites.Underground.offset, Sprites.Underground.id);
+    this.floortile = new Sprite(Characters.StageFloor.image, Characters.StageFloor.start, Characters.StageFloor.size, Characters.StageFloor.offset, Characters.StageFloor.id);
+    this.undergroundtile = new Sprite(Characters.Underground.image, Characters.Underground.start, Characters.Underground.size, Characters.Underground.offset, Characters.Underground.id);
     this.shading = Shading.SHADE;
   }
 
@@ -186,7 +197,7 @@ enum SpriteID {
   Underground,
 }
 
-const Sprites = {
+const Characters = {
   StageFloor: {
     image: "./assets/platforms/tiles/tile_0003.png",
     start: new Vector(0, 0),
@@ -206,6 +217,9 @@ const Sprites = {
     start: new Vector(0, 0),
     size: new Vector(120, 80),
     offset: new Vector(0, 0),
+    moves: [
+      { name: "Slash", damage: 10 },
+    ],
     id: SpriteID.Knight,
   },
   BlueWitch: {
@@ -213,12 +227,20 @@ const Sprites = {
     start: new Vector(0, 0),
     size: new Vector(32, 40),
     offset: new Vector(0, 0),
+    moves: [
+      { name: "Heal", damage: - 4 },
+      { name: "Arcane Burst", damage: 7 },
+    ],
     id: SpriteID.BlueWitch,
   },
   Necromancer: {
     image: "./assets/necromancer/sprite_sheet.png",
     start: new Vector(0, 0),
     size: new Vector(160, 128),
+    moves: [
+      { name: "Bone Shield", damage: 0 },
+      { name: "Dark Pulse", damage: 7 },
+    ],
     offset: new Vector(0, 0),
     id: SpriteID.Necromancer,
   },
@@ -251,17 +273,17 @@ class DisplayDriver {
   private ctxHeight: number;
   private xOffset: number;
   private yOffset: number;
-  private scale: number;
   private stage: Stage;
   private gameState: GameState;
+  public scale: number;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
     this.ui = ui;
     this.baseWidth = 320;
     this.baseHeight = 180;
-    this.ctxWidth = 16;
-    this.ctxHeight = 9;
+    this.ctxWidth = 320;
+    this.ctxHeight = 180;
     this.scale = 1;
     this.xOffset = 0;
     this.yOffset = 0;
@@ -323,8 +345,6 @@ class DisplayDriver {
 
     this.xOffset = Math.floor(Math.abs((this.ctx.canvas.width - this.ctxWidth) / 2));
     // this.yOffset = Math.floor(Math.abs((this.ctx.canvas.height - this.ctxHeight) / 2));
-
-    this.ui.resize(this.ctxWidth, this.ctxHeight);
   }
 
   draw(uiState: UIMode): void {
@@ -358,12 +378,12 @@ class DisplayDriver {
       // this.ctx.beginPath();
       // this.ctx.rect(this.cX(0), this.cY(0), this.ctxWidth, this.ctxHeight);
       // this.ctx.stroke();
-
+      //
       // this.ctx.beginPath();
       // this.ctx.moveTo(this.cX(Math.floor(this.ctxWidth / 2)), 0);
       // this.ctx.lineTo(this.cX(Math.floor(this.ctxWidth / 2)), this.ctxHeight);
       // this.ctx.stroke();
-
+      //
       // this.ctx.beginPath();
       // this.ctx.moveTo(this.cX(Math.floor(this.ctxWidth / 4)), 0);
       // this.ctx.lineTo(this.cX(Math.floor(this.ctxWidth / 4)), this.ctxHeight);
@@ -379,7 +399,7 @@ class DisplayDriver {
       // underground. not sure about this
       let k = 0;
       for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j += blockwidth) {
-        const undergroundPos = new Vector(this.cX(i), this.baseHeight + (k * blockwidth));
+        const undergroundPos = new Vector(i, this.baseHeight + (k * blockwidth));
         this.drawSprite(this.stage.undergroundtile, undergroundPos);
         k++;
       }
@@ -436,59 +456,67 @@ class DisplayDriver {
   }
 
   private drawUI(uiState: UIMode) {
-    switch (uiState) {
-      case UIMode.TitleScreen:
-        this.drawPanel(this.ui.titleScreen);
+    this.ui.curMode.forEach((element) => {
+      if (!element.visible) return
 
-        this.ui.titleScreen.children.forEach((child) => {
-          if (child instanceof Button) {
-            this.drawButton(child);
-          } else if (child instanceof Panel) {
-            this.drawPanel(child)
-          }
-        });
-        break;
-      case UIMode.InGame:
-        this.ui.gameScreen.children.forEach((child) => {
-          if (child instanceof Button) {
-            this.drawButton(child);
-          }
-        });
-        break;
-    }
+      switch (true) {
+        case element instanceof Button:
+          this.drawButton(element as Button);
+          break;
+        case element instanceof Panel:
+          this.drawPanel(element as Panel)
+          break;
+      }
+    });
   }
 
   private drawButton(btn: Button) {
-    this.ctx.fillStyle = "#FFFFF0";
-    this.ctx.fillRect(this.cX(btn.x), this.cY(btn.y), btn.width, btn.height);
+    if (!btn.visible) return
+    this.ctx.fillStyle = btn.backgroundColor;
+    this.ctx.fillRect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
 
-    this.ctx.strokeStyle = "black";
-    this.ctx.lineWidth = 5;
+    this.ctx.strokeStyle = btn.borderColor;
+    this.ctx.lineWidth = btn.borderWidth;
     this.ctx.beginPath();
-    this.ctx.rect(this.cX(btn.x), this.cY(btn.y), btn.width, btn.height);
+    this.ctx.rect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
     this.ctx.stroke();
 
     this.ctx.fillStyle = "black";
-    const fontSize = Math.round(btn.width * 0.08);
+    const fontSize = Math.round(btn.width * this.scale * 0.08);
     this.ctx.font = `${fontSize}px "Press Start 2P"`;
 
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
 
-    const textX = btn.x + btn.width / 2;
-    const textY = btn.y + btn.height / 2;
+    const textX = Math.floor(btn.x + btn.width / 2) * this.scale;
+    const textY = Math.floor(btn.y + btn.height / 2) * this.scale;
 
     this.ctx.fillText(btn.text, this.cX(textX), this.cY(textY));
   }
 
   private drawPanel(pnl: Panel) {
+    if (!pnl.visible) return
+    this.ctx.save();
     this.ctx.fillStyle = pnl.backgroundColor;
-    this.ctx.fillRect(this.cX(pnl.x), this.cY(pnl.y), pnl.width, pnl.height)
+    this.ctx.fillRect(this.cX(pnl.x * this.scale), this.cY(pnl.y * this.scale), this.scale * pnl.width, this.scale * pnl.height)
+    this.ctx.restore();
 
-    this.ctx.strokeStyle = pnl.backgroundColor;
+    this.ctx.strokeStyle = pnl.borderColor;
     this.ctx.lineWidth = pnl.borderWidth;
     this.ctx.beginPath();
-    this.ctx.rect(this.cX(pnl.x), this.cY(pnl.y), pnl.width, pnl.height);
+    this.ctx.rect(this.cX(pnl.x * this.scale), this.cY(pnl.y * this.scale), pnl.width * this.scale, pnl.height * this.scale);
+    this.ctx.stroke();
+
+    pnl.children.forEach((child) => {
+      switch (true) {
+        case child instanceof Button:
+          this.drawButton(child as Button);
+          break;
+        case child instanceof Panel:
+          this.drawPanel(child as Panel)
+          break;
+      }
+    });
   }
 }
 
@@ -505,123 +533,129 @@ class EventBus {
 }
 
 
-function constructTitleScreen(): Panel {
+function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
+  const pnlHeight = Math.floor(baseHeight * 0.4);
+  const pnlWidth = Math.floor(pnlHeight * 0.5);
+  const x = Math.floor(
+    (baseWidth * 0.5) - (pnlWidth * 0.5)
+  );
+  const y = Math.floor(
+    (baseHeight * 0.5) - (pnlHeight * 0.5)
+  );
+
+  const mainPanel = new Panel(
+    generateID(),
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    null,
+    []
+  );
+
+  // should export this later to maybe some persistence files
   const mainScreenButtons = [
     {
-      event: EventType.CREATE_ROOM,
+      event: [EventType.CREATE_ROOM],
       text: "Create Room",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
     },
     {
-      event: EventType.CHANGE_TEAM,
+      event: [EventType.CHANGE_TEAM],
       text: "Join Room",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
     },
     {
-      event: EventType.CHANGE_TEAM,
+      event: [EventType.CHANGE_TEAM],
       text: "Change Team",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
     },
     {
-      event: EventType.UNUSED,
+      event: [EventType.UNUSED],
       text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
     },
   ];
 
-  const mainPanel = new Panel(
-    0,
-    0,
-    0,
-    0,
-    Alignment.VERTICAL,
-    10,
-    BorderWidth.Med,
-    null
-  );
-
-  mainScreenButtons.forEach((btn) => {
-    const buttonWidth = mainPanel.width * 0.8;
-    const buttonHeight =
-      mainPanel.height / mainScreenButtons.length - mainPanel.margin;
-    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text, btn.event);
+  // some padding for the buttons
+  const padding = 4;
+  const btnHeight = (pnlHeight / mainScreenButtons.length) - padding;
+  mainScreenButtons.forEach((btn, i) => {
+    const btnY = (y + ((btnHeight + padding) * i));
+    const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, mainPanel, [], btn.event, btn.text);
+    childBtn.backgroundColor = BackgroundColor.IvoryWhite;
+    childBtn.borderColor = BorderColor.Black;
+    childBtn.borderWidth = BorderWidth.Med;
     mainPanel.addChild(childBtn);
   });
 
-  mainPanel.resize();
-  return mainPanel;
+
+  return [mainPanel];
 }
 
-function constructGameScreen(): Panel {
-  const mainScreenButtons = [
-    {
-      event: EventType.UNUSED,
-      text: "Attack",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      event: EventType.UNUSED,
-      text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      event: EventType.UNUSED,
-      text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-    {
-      event: EventType.UNUSED,
-      text: "Unused",
-      height: 100,
-      width: 200,
-      x: 0,
-      y: 0,
-    },
-  ];
-
+function constructGameScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
+  // x, y, width, height, parent, children
+  const pnlWidth = baseWidth * 0.7;
+  const pnlHeight = Characters.StageFloor.size.y;
+  const x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
+  const y = Math.floor((baseHeight) - (pnlHeight - 3));
   const mainPanel = new Panel(
-    0,
-    0,
-    0,
-    0,
-    Alignment.HORIZONTAL,
-    10,
-    BorderWidth.Med,
+    generateID(),
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
     null,
+    [],
   );
 
-  const screens = Map<number, UIElement[]>
-  mainScreenButtons.forEach((btn) => {
-    const buttonWidth = mainPanel.width * 0.8;
-    const buttonHeight =
-      mainPanel.height / mainScreenButtons.length - mainPanel.margin;
-    const childBtn = new Button(0, 0, buttonWidth, buttonHeight, btn.text, btn.event);
-    mainPanel.addChild(childBtn);
-  });
+  mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
+  mainPanel.borderColor = BorderColor.Black;
+  mainPanel.borderWidth = BorderWidth.Med;
 
-  mainPanel.resize();
-  return mainPanel;
+  // the below code is just for testing and proof of concept
+  const btnWidth = pnlWidth * 0.2;
+  const btnHeight = pnlHeight * 0.8;
+  const button = new Button(
+    generateID(),
+    x + ((pnlWidth / 2) - (btnWidth / 2)),
+    y + ((pnlHeight / 2) - (btnHeight / 2)),
+    btnWidth,
+    btnHeight,
+    mainPanel,
+    [],
+    [EventType.UI_TOGGLE],
+    "Change"
+  );
+
+  button.backgroundColor = BackgroundColor.IvoryWhite;
+  button.borderColor = BorderColor.Black;
+  button.borderWidth = BorderWidth.Med;
+
+  const btn2Width = pnlWidth * 0.2;
+  const btn2Height = pnlHeight * 0.8;
+  const button2 = new Button(
+    generateID(),
+    x + (pnlWidth - btn2Width - 2),
+    y + ((pnlHeight / 2) - (btn2Height / 2)),
+    btn2Width,
+    btn2Height,
+    mainPanel,
+    [],
+    [EventType.UI_TOGGLE],
+    "Back"
+  );
+
+  button2.backgroundColor = BackgroundColor.IvoryWhite;
+  button2.borderColor = BorderColor.Black;
+  button2.borderWidth = BorderWidth.Med;
+  button2.visible = false;
+
+  mainPanel.addChild(button);
+  mainPanel.addChild(button2);
+
+  button.addToggleId(button2.id);
+  button2.addToggleId(button2.id);
+  button.addToggleId(button.id);
+  button2.addToggleId(button.id);
+
+  return [mainPanel];
 }
 
 enum UIMode {
@@ -630,91 +664,73 @@ enum UIMode {
   InGame,
 }
 
+// damn never thought id ever use a closure but here we are
+function initIdGenerator(): () => number {
+  let counter = 0;
+
+  return function generateID(): number {
+    return counter++;
+  }
+}
+
 class UI {
   private eventBus: EventBus;
+  private idGenerator: () => number;
 
-  public curMode: Panel;
-  public titleScreen: Panel;
-  public gameScreen: Panel;
+  public curMode: UIElement[];
+  public screens: { [key in UIMode]: UIElement[] }
 
-  constructor(eventBus: EventBus) {
+  constructor(eventBus: EventBus, baseWidth: number, baseHeight: number) {
     this.eventBus = eventBus;
-    this.titleScreen = constructTitleScreen();
-    this.gameScreen = constructGameScreen();
-    this.curMode = this.titleScreen;
+    this.idGenerator = initIdGenerator();
+    this.screens = {
+      [UIMode.TitleScreen]: constructTitleScreen(baseWidth, baseHeight, this.idGenerator),
+      [UIMode.Waiting]: [],
+      [UIMode.InGame]: constructGameScreen(baseWidth, baseHeight, this.idGenerator),
+    };
+    this.curMode = this.screens[UIMode.TitleScreen];
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
-      const btn = this.buttonClicked(mousePosition);
+      for (const element of this.curMode) {
+        const btn = this.buttonClicked(element, mousePosition);
 
-      if (btn) {
-        console.log(btn.text);
-        const event = ConstructEvent(btn.eventType(), btn);
-        this.eventBus.send(event);
+        if (btn) {
+          console.log(btn.text);
+          const events = btn.eventList();
+          events.forEach((e) => {
+            const event = ConstructEvent(e, btn);
+            this.eventBus.send(event);
+          });
+          break;
+        }
       }
     });
+
+    console.log(this.screens);
   }
 
   public setMode(mode: UIMode) {
     switch (mode) {
       case (UIMode.TitleScreen):
-        this.curMode = this.titleScreen;
+        this.curMode = this.screens[UIMode.TitleScreen];
         break;
       case (UIMode.InGame):
-        this.curMode = this.gameScreen;
+        this.curMode = this.screens[UIMode.InGame];
         break;
     }
   }
 
-  resize(ctxWidth: number, ctxHeight: number): void {
-    // TitleScreen
-    this.titleScreen.height = Math.floor(ctxHeight * 0.4);
-    this.titleScreen.width = Math.floor(this.titleScreen.height * 0.5);
-    this.titleScreen.x = Math.floor(
-      (ctxWidth / 2) - (this.titleScreen.width / 2)
-    );
-    this.titleScreen.y = Math.floor(
-      ctxHeight / 2 - this.titleScreen.height / 2
-    );
+  // i like this function
+  // ram will be eaten up so much if the UI is anymore complex though
+  private buttonClicked(element: UIElement, mouse: { x: number; y: number }): Button | null {
+    if (!element.contains(mouse.x, mouse.y) || !element.visible) return null;
 
-    this.titleScreen.resize();
+    if (element instanceof Button) return element;
 
-    // Game Screen
-    this.gameScreen.height = Math.floor(ctxHeight * 0.1);
-    this.gameScreen.width = ctxWidth - 6;
-    this.gameScreen.x = 3;
-    this.gameScreen.y = ctxHeight - this.gameScreen.height;
-
-    this.gameScreen.resize();
-  }
-
-  private buttonClicked(mouse: { x: number; y: number }): Button | null {
-    if (!this.curMode.contains(mouse.x, mouse.y)) {
-      return null;
-    }
-
-    for (const child of this.curMode.children) {
-      const btn = this.checkChildren(child, mouse.x, mouse.y);
-      if (btn !== null) {
-        return btn;
-      }
-    }
-
-    return null;
-  }
-
-  private checkChildren(node: UIElement, x: number, y: number): Button | null {
-    if (!node.contains(x, y)) {
-      return null;
-    }
-
-    if (node instanceof Button && node.containsPoint(x, y)) {
-      return node;
-    }
-
-    for (const child of node.children) {
-      const btn = this.checkChildren(child, x, y);
-      if (btn !== null) {
-        return btn;
+    if (element instanceof Panel) {
+      for (const child of element.children) {
+        const btn = this.buttonClicked(child, mouse);
+        if (btn) return btn;
       }
     }
 
@@ -727,46 +743,15 @@ class UI {
 
     // im ngl I feel like this access to the display driver function is incorrect but if I didn't do it this way,
     // then my code would look like a react project that passes down a piece of data 5 layers
-    const x = this.eventBus.bus.displayDriver.rX((e.clientX - rect.left) * (canvas.width / rect.width));
-    const y = this.eventBus.bus.displayDriver.rY((e.clientY - rect.top) * (canvas.height / rect.height));
+    const scale = this.eventBus.bus.displayDriver.scale;
+    const x = Math.floor(this.eventBus.bus.displayDriver.rX((e.clientX - rect.left) * (canvas.width / rect.width)) / scale);
+    const y = Math.floor(this.eventBus.bus.displayDriver.rY((e.clientY - rect.top) * (canvas.height / rect.height)) / scale);
+
+    console.log(x, y)
 
     return { x: x, y: y };
   }
 
-}
-
-class UIElement {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  children: UIElement[];
-
-  constructor(x: number, y: number, width: number, height: number) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-    this.children = [];
-  }
-
-  resize(): void {
-    this.children.forEach((child) => child.resize());
-  }
-
-  contains(x: number, y: number): boolean {
-    return (
-      x >= this.x &&
-      x <= this.x + this.width &&
-      y >= this.y &&
-      y <= this.y + this.height
-    );
-  }
-}
-
-enum Alignment {
-  VERTICAL = "Vertical",
-  HORIZONTAL = "Horizontal",
 }
 
 enum BackgroundColor {
@@ -781,63 +766,77 @@ enum BorderColor {
   Black = "black"
 }
 
-class Panel extends UIElement {
-  public screens: Map<number, UIElement[]> | null;
-  public alignment: Alignment;
-  public margin: number;
-  public borderWidth: number;
-  public borderColor: string;
-  public backgroundColor: string;
+class UIElement {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  parent: UIElement | null;
+  children: UIElement[];
+  visible: boolean;
+  borderWidth: number;
+  borderColor: string;
+  backgroundColor: string;
 
   constructor(
+    id: number,
     x: number,
     y: number,
     width: number,
     height: number,
-    alignment: Alignment,
-    margin: number,
-    borderWidth: number = 0,
-    screens: Map<number, UIElement[]> | null,
-    borderColor: string = "",
-    backgroundColor: string = ""
+    parent: UIElement | null,
+    children: UIElement[]
   ) {
-    super(x, y, width, height);
-    this.alignment = alignment;
-    this.margin = margin;
-    this.borderWidth = borderWidth;
-    this.borderColor = borderColor;
-    this.backgroundColor = backgroundColor;
-    this.screens = screens;
+    this.id = id;
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.parent = parent;
+    this.children = children;
+    this.borderWidth = BorderWidth.Med;
+    this.borderColor = "rgba(0, 0, 0, 0)";
+    this.backgroundColor = "rgba(0, 0, 0, 0)";
+    this.visible = true
   }
 
-  resize(): void {
-    const totalChildren = this.children.length;
-    let width: number, height: number;
-    let xOffset: ((index: number) => number) | number = 0;
-    let yOffset: ((index: number) => number) | number = 0;
+  contains(x: number, y: number): boolean {
+    return (
+      x >= this.x &&
+      x <= this.x + this.width &&
+      y >= this.y &&
+      y <= this.y + this.height
+    );
+  }
 
-    switch (this.alignment) {
-      case Alignment.VERTICAL:
-        height = Math.floor(this.height / totalChildren - this.margin);
-        width = this.width;
-        yOffset = (index: number) => (height + this.margin) * index;
+  toggle(): void {
+    this.visible = !this.visible;
+  }
+
+  toggleChild(id: number): void {
+    for (const child of this.children) {
+      if (child.id == id) {
+        child.toggle();
         break;
+      }
 
-      case Alignment.HORIZONTAL:
-        width = Math.floor(this.width / totalChildren - this.margin);
-        height = this.height;
-        xOffset = (index: number) => (width + this.margin) * index;
-        break;
+      child.toggleChild(id);
     }
+  }
+}
 
-    for (const [index, child] of this.children.entries()) {
-      child.width = width;
-      child.height = height;
-      child.x = this.x + (typeof xOffset === "function" ? xOffset(index) : xOffset);
-      child.y = this.y + (typeof yOffset === "function" ? yOffset(index) : yOffset);
-    }
-
-    super.resize();
+class Panel extends UIElement {
+  constructor(
+    id: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    parent: UIElement | null,
+    children: UIElement[]
+  ) {
+    super(id, x, y, width, height, parent, children);
   }
 
   addChild(child: UIElement): void {
@@ -851,29 +850,51 @@ class Panel extends UIElement {
 
 class Button extends UIElement {
   text: string;
-  event: EventType;
+  events: EventType[];
+  toggleIds: number[];
 
-  constructor(x: number, y: number, width: number, height: number, text: string, event: EventType) {
-    super(x, y, width, height);
+  constructor(
+    id: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    parent: UIElement | null,
+    children: UIElement[],
+    events: EventType[],
+    text: string
+  ) {
+    super(id, x, y, width, height, parent, children);
+    this.events = events;
     this.text = text;
-    this.event = event;
+    this.toggleIds = [];
   }
 
-  resize(): void {
+  eventList(): EventType[] {
+    return this.events;
   }
 
-  containsPoint(x: number, y: number): boolean {
-    return (
-      x >= this.x &&
-      x <= this.x + this.width &&
-      y >= this.y &&
-      y <= this.y + this.height
-    );
+  addToggleId(id: number) {
+    this.toggleIds.push(id);
+  }
+}
+
+class Modal extends UIElement {
+  text: string;
+
+  constructor(
+    id: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    parent: UIElement | null,
+    text: string
+  ) {
+    super(id, x, y, width, height, parent, []);
+    this.text = text;
   }
 
-  eventType(): EventType {
-    return this.event;
-  }
 }
 
 function main(): void {
