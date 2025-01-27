@@ -104,3 +104,42 @@ Date: 01/25/25
     * Add a way to switch subscreens in the current UI system
     * Start working game loop programming, attacks, chossing targets, etc
     * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
+
+Date: 01/26/25
+
+  Goals:
+    
+    * figure out a good UI page navigation system
+
+  Tasks Worked On: 
+    
+    * assigned IDS to each generated UI component to enable toggling of children 
+
+  Session highlights:  
+    
+    What went well: 
+
+      * Used a closure to make an id generating function. Allowed me to toggle components based on id
+
+    What didn't go well: 
+
+      * Toggling system seems a little odd. The list of togglableIDs is held in the button. However, 
+        this would make sense considering it is responsible for this event
+
+  Key learnings:
+
+    * UI components can switch screens by marking children visible or not visible which tells the rendering
+      system to draw this screen or not
+
+  Random thoughts:
+
+    * Still need to find a way to dynamically switch the button text. My idea is to build construct the 
+      UI screens needed to interact and complete a turn but have the UI object be responsible for the 
+      content of these screens based on the gameState. Good seperation of concerns IMO
+
+  Next steps:
+    
+    * Find a way to dynamically change content of screens based on gameState and send correct events that 
+      reflect the players choice using the UI elements
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
