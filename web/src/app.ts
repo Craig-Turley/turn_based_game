@@ -39,13 +39,15 @@ class Character {
   public health: number;
   public defense: number;
   public attack: Move[];
+  public name: string;
 
-  constructor(sprite: Sprite, position: Vector, health: number, defense: number, attack: Move[]) {
+  constructor(sprite: Sprite, position: Vector, health: number, defense: number, attack: Move[], name: string) {
     this.sprite = sprite;
     this.position = position;
     this.health = health;
     this.defense = defense;
     this.attack = attack;
+    this.name = name;
   }
 }
 
@@ -73,15 +75,15 @@ class GameState {
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id);
     const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
-    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, Characters.Necromancer.moves));
+    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, Characters.Necromancer.moves, Characters.Necromancer.name));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
-    team.push(new Character(witchSprite, witchPos, 2, 6, Characters.BlueWitch.moves));
+    team.push(new Character(witchSprite, witchPos, 2, 6, Characters.BlueWitch.moves, Characters.BlueWitch.name));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
-    team.push(new Character(knightSprite, knightPos, 5, 3, Characters.Knight.moves));
+    team.push(new Character(knightSprite, knightPos, 5, 3, Characters.Knight.moves, Characters.Knight.name));
 
     return team;
   }
@@ -222,6 +224,7 @@ const Characters = {
       { name: "Slash", damage: 10 },
     ],
     id: SpriteID.Knight,
+    name: "Knight",
   },
   BlueWitch: {
     image: "./assets/blue_witch/_idle.png",
@@ -233,6 +236,7 @@ const Characters = {
       { name: "Arcane Burst", damage: 7 },
     ],
     id: SpriteID.BlueWitch,
+    name: "Witch",
   },
   Necromancer: {
     image: "./assets/necromancer/sprite_sheet.png",
@@ -244,6 +248,7 @@ const Characters = {
     ],
     offset: new Vector(0, 0),
     id: SpriteID.Necromancer,
+    name: "Necromancer",
   },
 };
 
@@ -590,37 +595,52 @@ function constructTitleScreen(baseWidth: number, baseHeight: number, generateID:
   return [mainPanel];
 }
 
-// function evenlySpaceButtons(btnCount: number, padding: number, parentWidth: number, btnHeight: number, generateID: () => number): Button[] {
-//   let btns: Button[] = [];
-//
-//   const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
-//   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
-//   const startX = Math.floor((parentWidth - totalButtonsWidth) / 2);
-//
-//   for (let i = 0; i < btnCount; i++) {
-//     const btn = new Button(
-//       generateID(),
-//       x + startX + (i * (btnWidth + padding)),
-//       y + Math.floor((pnlHeight - btnHeight) / 2),
-//       btnWidth,
-//       btnHeight,
-//       mainPanel,
-//       [],
-//       [EventType.UI_TOGGLE],
-//       text
-//     );
-//
-//     btn.borderColor = borderColor;
-//     btn.borderWidth = borderWidth;
-//     btn.backgroundColor = backgroundColor;
-//     btn.addToggleId(...ids);
-//
-//     targets.addChild(btn);
-//   }
-//
-//
-//   return btns;
-// }
+function evenlySpaceButtons(
+  generateID: () => number,
+  parentX: number,         
+  parentY: number,         
+  parentWidth: number,     
+  parentHeight: number,    
+  btnCount: number,        
+  padding: number          
+): Button[] {
+
+  const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
+  const btnHeight = Math.floor(parentHeight * 0.8);
+
+  const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
+  const startX = parentX + Math.floor((parentWidth - totalButtonsWidth) / 2);
+
+  const btns: Button[] = [];
+  for (let i = 0; i < btnCount; i++) {
+    const btnX = startX + i * (btnWidth + padding); // Compute X position for the button
+    const btnY = parentY + Math.floor((parentHeight - btnHeight) / 2); // Center Y position
+
+    const btn = new Button(
+      generateID(),   
+      btnX,           
+      btnY,           
+      btnWidth,       
+      btnHeight,      
+      null,           
+      [],             
+      [EventType.UI_TOGGLE], 
+      "",      
+    );
+
+    btns.push(btn);
+  }
+
+  return btns;
+}
+
+function setBackButton(btn: Button, ...toggleIds: number[]) {
+  btn.backgroundColor = BackgroundColor.LightGrey;
+  btn.borderColor = BorderColor.Black;
+  btn.borderWidth = BorderWidth.Med;
+  btn.text = "Back";
+  btn.addToggleId(...toggleIds);
+}
 
 function constructGameScreen(team: Character[], baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
   // x, y, width, height, parent, children
@@ -641,12 +661,6 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
   mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
   mainPanel.borderColor = BorderColor.Black;
   mainPanel.borderWidth = BorderWidth.Med;
-
-  let btnCount = 4;
-  const padding = 4;
-
-  const btnWidth = Math.floor((pnlWidth - (padding * (btnCount + 1))) / btnCount);
-  const btnHeight = Math.floor(pnlHeight * 0.8);
 
   const targets = new Panel(
     generateID(),
@@ -678,43 +692,40 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
     [],
   )
 
+  const btns = evenlySpaceButtons(
+    generateID,
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    4,
+    4
+  );
+
+  console.log(btns);
+
+  let btnCount = 4;
+  const padding = 4;
+
+  const btnWidth = Math.floor((pnlWidth - (padding * (btnCount + 1))) / btnCount);
+  const btnHeight = Math.floor(pnlHeight * 0.8);
+
   // Compute horizontal starting point to center all buttons
   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
   const startX = Math.floor((pnlWidth - totalButtonsWidth) / 2);
 
-  for (let i = 0; i < btnCount; i++) {
-    let text = `Target ${i}`;
-    let borderColor = BorderColor.Black;
-    let borderWidth = BorderWidth.Med;
-    let backgroundColor = BackgroundColor.IvoryWhite;
-    let ids = [targets.id, characters.id];
-
-    if (i == 0) {
-      text = "Back";
-      backgroundColor = BackgroundColor.LightGrey;
-      ids.push(attacks.id);
-    }
-
-    const btn = new Button(
-      generateID(),
-      x + startX + (i * (btnWidth + padding)),
-      y + Math.floor((pnlHeight - btnHeight) / 2),
-      btnWidth,
-      btnHeight,
-      mainPanel,
-      [],
-      [EventType.UI_TOGGLE],
-      text
-    );
-
-    btn.borderColor = borderColor;
-    btn.borderWidth = borderWidth;
-    btn.backgroundColor = backgroundColor;
-    btn.addToggleId(...ids);
-
-    targets.addChild(btn);
+  setBackButton(btns[0], targets.id, attacks.id);
+  console.log(team);
+  for (let i = 1; i < btns.length; i++) {
+    const btn = btns[i];
+    btn.backgroundColor = BackgroundColor.IvoryWhite;
+    btn.borderWidth = BorderWidth.Med;
+    btn.borderColor = BorderColor.Black;
+    btn.text = team[i - 1].name;
+    btn.addToggleId(targets.id, characters.id);
   }
 
+  targets.addChild(...btns)
   targets.toggle();
   mainPanel.addChild(targets);
 
@@ -882,7 +893,7 @@ class UI {
     return { x: x, y: y };
   }
 
-  public populateButtonData(team: Characters[], baseWidth, baseHeight) {
+  public populateButtonData(team: Character[], baseWidth: number, baseHeight: number) {
     this.screens[2] = constructGameScreen(this.eventBus.bus.gameState.team, baseWidth, baseHeight, this.idGenerator)
   }
 
@@ -894,7 +905,7 @@ enum BackgroundColor {
 }
 
 enum BorderWidth {
-  Med = 5
+  Med = 3
 }
 
 enum BorderColor {
@@ -975,8 +986,8 @@ class Panel extends UIElement {
     super(id, x, y, width, height, parent, children);
   }
 
-  addChild(child: UIElement): void {
-    this.children.push(child);
+  addChild(...child: UIElement[]): void {
+    this.children.push(...child);
   }
 
   // addScreen(id: number, screen: UIElement[]): void {
