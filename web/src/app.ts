@@ -93,7 +93,7 @@ class Game {
   private eventBus: EventBus;
   private ui: UI;
   private uiState: UIMode;
-  private gameState: GameState;
+  public gameState: GameState;
   public displayDriver: DisplayDriver;
 
   constructor(ctx: CanvasRenderingContext2D) {
@@ -120,7 +120,8 @@ class Game {
     switch (event.event) {
       case EventType.CREATE_ROOM:
         this.uiState = UIMode.InGame;
-        this.ui.setMode(this.uiState);;
+        this.ui.populateButtonData(this.gameState.team, this.displayDriver.baseWidth, this.displayDriver.baseHeight);
+        this.ui.setMode(this.uiState);
         break;
       case EventType.UI_TOGGLE:
         const btn: Button = event.data;
@@ -267,14 +268,14 @@ class Sprite {
 class DisplayDriver {
   private ctx: CanvasRenderingContext2D;
   private ui: UI;
-  private baseWidth: number;
-  private baseHeight: number;
   private ctxWidth: number;
   private ctxHeight: number;
   private xOffset: number;
   private yOffset: number;
   private stage: Stage;
   private gameState: GameState;
+  public baseWidth: number;
+  public baseHeight: number;
   public scale: number;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
@@ -589,12 +590,44 @@ function constructTitleScreen(baseWidth: number, baseHeight: number, generateID:
   return [mainPanel];
 }
 
-function constructGameScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
+// function evenlySpaceButtons(btnCount: number, padding: number, parentWidth: number, btnHeight: number, generateID: () => number): Button[] {
+//   let btns: Button[] = [];
+//
+//   const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
+//   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
+//   const startX = Math.floor((parentWidth - totalButtonsWidth) / 2);
+//
+//   for (let i = 0; i < btnCount; i++) {
+//     const btn = new Button(
+//       generateID(),
+//       x + startX + (i * (btnWidth + padding)),
+//       y + Math.floor((pnlHeight - btnHeight) / 2),
+//       btnWidth,
+//       btnHeight,
+//       mainPanel,
+//       [],
+//       [EventType.UI_TOGGLE],
+//       text
+//     );
+//
+//     btn.borderColor = borderColor;
+//     btn.borderWidth = borderWidth;
+//     btn.backgroundColor = backgroundColor;
+//     btn.addToggleId(...ids);
+//
+//     targets.addChild(btn);
+//   }
+//
+//
+//   return btns;
+// }
+
+function constructGameScreen(team: Character[], baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
   // x, y, width, height, parent, children
-  const pnlWidth = baseWidth * 0.7;
-  const pnlHeight = Characters.StageFloor.size.y;
-  const x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
-  const y = Math.floor((baseHeight) - (pnlHeight - 3));
+  let pnlWidth = baseWidth * 0.7;
+  let pnlHeight = Characters.StageFloor.size.y;
+  let x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
+  let y = Math.floor((baseHeight) - (pnlHeight - 3));
   const mainPanel = new Panel(
     generateID(),
     x,
@@ -609,51 +642,150 @@ function constructGameScreen(baseWidth: number, baseHeight: number, generateID: 
   mainPanel.borderColor = BorderColor.Black;
   mainPanel.borderWidth = BorderWidth.Med;
 
-  // the below code is just for testing and proof of concept
-  const btnWidth = pnlWidth * 0.2;
-  const btnHeight = pnlHeight * 0.8;
-  const button = new Button(
+  let btnCount = 4;
+  const padding = 4;
+
+  const btnWidth = Math.floor((pnlWidth - (padding * (btnCount + 1))) / btnCount);
+  const btnHeight = Math.floor(pnlHeight * 0.8);
+
+  const targets = new Panel(
     generateID(),
-    x + ((pnlWidth / 2) - (btnWidth / 2)),
-    y + ((pnlHeight / 2) - (btnHeight / 2)),
-    btnWidth,
-    btnHeight,
-    mainPanel,
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    null,
     [],
-    [EventType.UI_TOGGLE],
-    "Change"
   );
 
-  button.backgroundColor = BackgroundColor.IvoryWhite;
-  button.borderColor = BorderColor.Black;
-  button.borderWidth = BorderWidth.Med;
-
-  const btn2Width = pnlWidth * 0.2;
-  const btn2Height = pnlHeight * 0.8;
-  const button2 = new Button(
+  const attacks = new Panel(
     generateID(),
-    x + (pnlWidth - btn2Width - 2),
-    y + ((pnlHeight / 2) - (btn2Height / 2)),
-    btn2Width,
-    btn2Height,
-    mainPanel,
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    null,
     [],
-    [EventType.UI_TOGGLE],
-    "Back"
   );
 
-  button2.backgroundColor = BackgroundColor.IvoryWhite;
-  button2.borderColor = BorderColor.Black;
-  button2.borderWidth = BorderWidth.Med;
-  button2.visible = false;
+  const characters = new Panel(
+    generateID(),
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    null,
+    [],
+  )
 
-  mainPanel.addChild(button);
-  mainPanel.addChild(button2);
+  // Compute horizontal starting point to center all buttons
+  const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
+  const startX = Math.floor((pnlWidth - totalButtonsWidth) / 2);
 
-  button.addToggleId(button2.id);
-  button2.addToggleId(button2.id);
-  button.addToggleId(button.id);
-  button2.addToggleId(button.id);
+  for (let i = 0; i < btnCount; i++) {
+    let text = `Target ${i}`;
+    let borderColor = BorderColor.Black;
+    let borderWidth = BorderWidth.Med;
+    let backgroundColor = BackgroundColor.IvoryWhite;
+    let ids = [targets.id, characters.id];
+
+    if (i == 0) {
+      text = "Back";
+      backgroundColor = BackgroundColor.LightGrey;
+      ids.push(attacks.id);
+    }
+
+    const btn = new Button(
+      generateID(),
+      x + startX + (i * (btnWidth + padding)),
+      y + Math.floor((pnlHeight - btnHeight) / 2),
+      btnWidth,
+      btnHeight,
+      mainPanel,
+      [],
+      [EventType.UI_TOGGLE],
+      text
+    );
+
+    btn.borderColor = borderColor;
+    btn.borderWidth = borderWidth;
+    btn.backgroundColor = backgroundColor;
+    btn.addToggleId(...ids);
+
+    targets.addChild(btn);
+  }
+
+  targets.toggle();
+  mainPanel.addChild(targets);
+
+  btnCount = 3;
+
+  for (let i = 0; i < btnCount; i++) {
+    let text = `Attack ${i}`;
+    let borderColor = BorderColor.Black;
+    let borderWidth = BorderWidth.Med;
+    let backgroundColor = BackgroundColor.IvoryWhite;
+    let ids = [attacks.id, targets.id];
+
+    if (i == 0) {
+      text = "Back";
+      backgroundColor = BackgroundColor.LightGrey;
+      ids = [attacks.id, characters.id];
+    }
+
+    const btn = new Button(
+      generateID(),
+      x + startX + (i * (btnWidth + padding)),
+      y + Math.floor((pnlHeight - btnHeight) / 2),
+      btnWidth,
+      btnHeight,
+      mainPanel,
+      [],
+      [EventType.UI_TOGGLE],
+      text
+    );
+
+    btn.borderColor = borderColor;
+    btn.borderWidth = borderWidth;
+    btn.backgroundColor = backgroundColor;
+
+    btn.addToggleId(...ids);
+    attacks.addChild(btn);
+  }
+
+  attacks.toggle();
+  mainPanel.addChild(attacks);
+
+  btnCount = 3;
+
+  for (let i = 0; i < btnCount; i++) {
+    let text = `Character ${i}`;
+    let borderColor = BorderColor.Black;
+    let borderWidth = BorderWidth.Med;
+    let backgroundColor = BackgroundColor.IvoryWhite;
+    let ids = [characters.id, attacks.id];
+
+    const btn = new Button(
+      generateID(),
+      x + startX + (i * (btnWidth + padding)),
+      y + Math.floor((pnlHeight - btnHeight) / 2),
+      btnWidth,
+      btnHeight,
+      mainPanel,
+      [],
+      [EventType.UI_TOGGLE],
+      text
+    );
+
+    btn.borderColor = borderColor;
+    btn.borderWidth = borderWidth;
+    btn.backgroundColor = backgroundColor;
+    btn.addToggleId(...ids);
+
+    characters.addChild(btn);
+  }
+
+  mainPanel.addChild(characters);
 
   return [mainPanel];
 }
@@ -686,7 +818,7 @@ class UI {
     this.screens = {
       [UIMode.TitleScreen]: constructTitleScreen(baseWidth, baseHeight, this.idGenerator),
       [UIMode.Waiting]: [],
-      [UIMode.InGame]: constructGameScreen(baseWidth, baseHeight, this.idGenerator),
+      [UIMode.InGame]: [],
     };
     this.curMode = this.screens[UIMode.TitleScreen];
     document.addEventListener("click", (e: MouseEvent) => {
@@ -705,8 +837,6 @@ class UI {
         }
       }
     });
-
-    console.log(this.screens);
   }
 
   public setMode(mode: UIMode) {
@@ -752,10 +882,15 @@ class UI {
     return { x: x, y: y };
   }
 
+  public populateButtonData(team: Characters[], baseWidth, baseHeight) {
+    this.screens[2] = constructGameScreen(this.eventBus.bus.gameState.team, baseWidth, baseHeight, this.idGenerator)
+  }
+
 }
 
 enum BackgroundColor {
-  IvoryWhite = "#FFFFF0"
+  IvoryWhite = "#FFFFF0",
+  LightGrey = "#D3D3D3"
 }
 
 enum BorderWidth {
@@ -812,6 +947,7 @@ class UIElement {
 
   toggle(): void {
     this.visible = !this.visible;
+    this.children.forEach((child) => child.toggle());
   }
 
   toggleChild(id: number): void {
@@ -874,8 +1010,8 @@ class Button extends UIElement {
     return this.events;
   }
 
-  addToggleId(id: number) {
-    this.toggleIds.push(id);
+  addToggleId(...ids: number[]) {
+    this.toggleIds.push(...ids);
   }
 }
 
