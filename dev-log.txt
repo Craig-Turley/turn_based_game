@@ -144,7 +144,7 @@ Date: 01/26/25
     * Start working game loop programming, attacks, chossing targets, etc
     * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
 
-Date: 01/26/25
+Date: 01/27/25
 
   Goals:
     
@@ -176,5 +176,39 @@ Date: 01/26/25
     
     * Find a way to dynamically change content of screens based on gameState and send correct events that 
       reflect the players choice using the UI elements
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
+
+Date: 01/28/25
+
+  Goals:
+    
+    * dynamically populate gameUI with appropriate data 
+
+  Tasks Worked On: 
+ 
+    * built out gamescreen using code and got navigation down 
+  
+  Session highlights:  
+    
+    What went well: 
+
+      *  
+
+    What didn't go well: 
+
+      * 
+
+  Key learnings:
+
+    *   
+
+  Random thoughts:
+
+    * Maybe consider just rendering team and them rendering next set of buttons based on user choice
+      ex Knight -> Knight Attcks -> appropriate targets
+
+  Next steps:
+    
     * Start working game loop programming, attacks, chossing targets, etc
     * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images

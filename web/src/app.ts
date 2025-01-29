@@ -75,15 +75,15 @@ class GameState {
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id);
     const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
-    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, Characters.Necromancer.moves, Characters.Necromancer.name));
+    team.push(new Character(necromancerSprite, necromancerPos, 3, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
-    team.push(new Character(witchSprite, witchPos, 2, 6, Characters.BlueWitch.moves, Characters.BlueWitch.name));
+    team.push(new Character(witchSprite, witchPos, 2, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
-    team.push(new Character(knightSprite, knightPos, 5, 3, Characters.Knight.moves, Characters.Knight.name));
+    team.push(new Character(knightSprite, knightPos, 5, 3, Characters.Knight.moves, Characters.Knight.id));
 
     return team;
   }
@@ -193,11 +193,11 @@ class Vector {
 }
 
 enum SpriteID {
-  Knight,
-  BlueWitch,
-  Necromancer,
-  StageFloor,
-  Underground,
+  Knight = "Knight",
+  BlueWitch = "BlueWitch",
+  Necromancer = "Necromancer",
+  StageFloor = "StageFloor",
+  Underground = "Underground",
 }
 
 const Characters = {
@@ -222,6 +222,7 @@ const Characters = {
     offset: new Vector(0, 0),
     moves: [
       { name: "Slash", damage: 10 },
+      { name: "Defend", damage: 0},
     ],
     id: SpriteID.Knight,
     name: "Knight",
@@ -692,7 +693,7 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
     [],
   )
 
-  const btns = evenlySpaceButtons(
+  const targetBtns = evenlySpaceButtons(
     generateID,
     x,
     y,
@@ -701,8 +702,6 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
     4,
     4
   );
-
-  console.log(btns);
 
   let btnCount = 4;
   const padding = 4;
@@ -714,10 +713,9 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
   const startX = Math.floor((pnlWidth - totalButtonsWidth) / 2);
 
-  setBackButton(btns[0], targets.id, attacks.id);
-  console.log(team);
-  for (let i = 1; i < btns.length; i++) {
-    const btn = btns[i];
+  setBackButton(targetBtns[0], targets.id, attacks.id);
+  for (let i = 1; i < targetBtns.length; i++) {
+    const btn = targetBtns[i];
     btn.backgroundColor = BackgroundColor.IvoryWhite;
     btn.borderWidth = BorderWidth.Med;
     btn.borderColor = BorderColor.Black;
@@ -725,77 +723,54 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
     btn.addToggleId(targets.id, characters.id);
   }
 
-  targets.addChild(...btns)
+  targets.addChild(...targetBtns)
   targets.toggle();
   mainPanel.addChild(targets);
 
-  btnCount = 3;
-
-  for (let i = 0; i < btnCount; i++) {
-    let text = `Attack ${i}`;
-    let borderColor = BorderColor.Black;
-    let borderWidth = BorderWidth.Med;
-    let backgroundColor = BackgroundColor.IvoryWhite;
-    let ids = [attacks.id, targets.id];
-
-    if (i == 0) {
-      text = "Back";
-      backgroundColor = BackgroundColor.LightGrey;
-      ids = [attacks.id, characters.id];
-    }
-
-    const btn = new Button(
-      generateID(),
-      x + startX + (i * (btnWidth + padding)),
-      y + Math.floor((pnlHeight - btnHeight) / 2),
-      btnWidth,
-      btnHeight,
-      mainPanel,
-      [],
-      [EventType.UI_TOGGLE],
-      text
-    );
-
-    btn.borderColor = borderColor;
-    btn.borderWidth = borderWidth;
-    btn.backgroundColor = backgroundColor;
-
-    btn.addToggleId(...ids);
-    attacks.addChild(btn);
+  const attackBtns = evenlySpaceButtons(
+    generateID,
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    3,
+    4
+  );
+  
+  setBackButton(attackBtns[0], characters.id, attacks.id);
+  for (let i = 1; i < attackBtns.length; i++) {
+    const btn = attackBtns[i];
+    btn.backgroundColor = BackgroundColor.IvoryWhite;
+    btn.borderWidth = BorderWidth.Med;
+    btn.borderColor = BorderColor.Black;
+    btn.text = "Not set";
+    btn.addToggleId(targets.id, attacks.id);
   }
 
+  attacks.addChild(...attackBtns)
   attacks.toggle();
   mainPanel.addChild(attacks);
 
-  btnCount = 3;
-
-  for (let i = 0; i < btnCount; i++) {
-    let text = `Character ${i}`;
-    let borderColor = BorderColor.Black;
-    let borderWidth = BorderWidth.Med;
-    let backgroundColor = BackgroundColor.IvoryWhite;
-    let ids = [characters.id, attacks.id];
-
-    const btn = new Button(
-      generateID(),
-      x + startX + (i * (btnWidth + padding)),
-      y + Math.floor((pnlHeight - btnHeight) / 2),
-      btnWidth,
-      btnHeight,
-      mainPanel,
-      [],
-      [EventType.UI_TOGGLE],
-      text
-    );
-
-    btn.borderColor = borderColor;
-    btn.borderWidth = borderWidth;
-    btn.backgroundColor = backgroundColor;
-    btn.addToggleId(...ids);
-
-    characters.addChild(btn);
+  const characterBtns = evenlySpaceButtons(
+    generateID,
+    x,
+    y,
+    pnlWidth,
+    pnlHeight,
+    3,
+    4
+  );
+  
+  for (let i = 0; i < characterBtns.length; i++) {
+    const btn = characterBtns[i];
+    btn.text = `${team[i].name}`;
+    btn.backgroundColor = BackgroundColor.IvoryWhite;
+    btn.borderWidth = BorderWidth.Med;
+    btn.borderColor = BorderColor.Black;
+    btn.addToggleId(characters.id, attacks.id);
   }
 
+  characters.addChild(...characterBtns)
   mainPanel.addChild(characters);
 
   return [mainPanel];
@@ -894,7 +869,7 @@ class UI {
   }
 
   public populateButtonData(team: Character[], baseWidth: number, baseHeight: number) {
-    this.screens[2] = constructGameScreen(this.eventBus.bus.gameState.team, baseWidth, baseHeight, this.idGenerator)
+    this.screens[2] = constructGameScreen(team, baseWidth, baseHeight, this.idGenerator)
   }
 
 }
