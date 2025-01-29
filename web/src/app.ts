@@ -8,6 +8,7 @@ enum EventType {
   CHANGE_TEAM,
   UI_TOGGLE,
   UNUSED,
+  CHOOSE_ACTIVE_CHARACTER
 }
 
 enum UIState {
@@ -29,7 +30,7 @@ function ConstructEvent(eventType: EventType, data: any): event {
 }
 
 type Move = {
-  name: String,
+  name: string,
   damage: number, // positive or negative based on healing effects and stuff 
 }
 
@@ -132,6 +133,9 @@ class Game {
           this.ui.curMode.forEach((child) => child.toggleChild(id));
         });
         break;
+      case EventType.CHOOSE_ACTIVE_CHARACTER:
+        const characterBtn: Button = event.data;
+        // FIND A WAY TO HANDLE ATTAKS HERE
     }
   }
 }
@@ -643,7 +647,12 @@ function setBackButton(btn: Button, ...toggleIds: number[]) {
   btn.addToggleId(...toggleIds);
 }
 
-function constructGameScreen(team: Character[], baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
+function constructGameScreen(
+  team: Character[], 
+  baseWidth: number, 
+  baseHeight: number, 
+  generateID: () => number
+): { screens: UIElement[], charactersid: number, attacksid: number, targetsid: number } {
   // x, y, width, height, parent, children
   let pnlWidth = baseWidth * 0.7;
   let pnlHeight = Characters.StageFloor.size.y;
@@ -768,12 +777,18 @@ function constructGameScreen(team: Character[], baseWidth: number, baseHeight: n
     btn.borderWidth = BorderWidth.Med;
     btn.borderColor = BorderColor.Black;
     btn.addToggleId(characters.id, attacks.id);
+    btn.addEvents(EventType.CHOOSE_ACTIVE_CHARACTER);  
   }
 
   characters.addChild(...characterBtns)
   mainPanel.addChild(characters);
 
-  return [mainPanel];
+return {
+    screens: [mainPanel],
+    charactersid: characters.id,
+    attacksid: attacks.id,
+    targetsid: targets.id
+  };
 }
 
 enum UIMode {
@@ -797,6 +812,7 @@ class UI {
 
   public curMode: UIElement[];
   public screens: { [key in UIMode]: UIElement[] }
+  public gameScreenData: { charID: number, atkID: number, tgtID: number } | null;
 
   constructor(eventBus: EventBus, baseWidth: number, baseHeight: number) {
     this.eventBus = eventBus;
@@ -823,6 +839,7 @@ class UI {
         }
       }
     });
+    this.gameScreenData = null;
   }
 
   public setMode(mode: UIMode) {
@@ -869,7 +886,23 @@ class UI {
   }
 
   public populateButtonData(team: Character[], baseWidth: number, baseHeight: number) {
-    this.screens[2] = constructGameScreen(team, baseWidth, baseHeight, this.idGenerator)
+    const { screens: gameScreens, charactersid: charID, attacksid: atkID, targetsid: tgtID } = constructGameScreen(team, baseWidth, baseHeight, this.idGenerator);
+    this.screens[2] = gameScreens;
+    this.gameScreenData = {
+      charID: charID,
+      atkID: atkID,
+      tgtID: tgtID,
+    }
+  }
+
+  public populateAttacks(character: Character) {
+    const atks = this.screens[2].find(c => c.id == this.gameScreenData?.atkID);
+    for (let i = 1; i < (atks?.children.length ?? 0); i++) {
+      const btn = atks?.children[i];
+      if (btn instanceof Button) {
+        btn.text = character.attack[i-1].name; 
+      }
+    }
   }
 
 }
@@ -998,6 +1031,10 @@ class Button extends UIElement {
 
   addToggleId(...ids: number[]) {
     this.toggleIds.push(...ids);
+  }
+
+  addEvents(...events: EventType[]) {
+    this.events.push(...events);
   }
 }
 
