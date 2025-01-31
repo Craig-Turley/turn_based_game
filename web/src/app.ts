@@ -91,6 +91,9 @@ class GameState {
 
 }
 
+const BASE_WIDTH = 320;
+const BASE_HEIGHT = 180;
+
 class Game {
   private ctx: CanvasRenderingContext2D;
   private eventBus: EventBus;
@@ -123,19 +126,15 @@ class Game {
     switch (event.event) {
       case EventType.CREATE_ROOM:
         this.uiState = UIMode.InGame;
-        this.ui.populateButtonData(this.gameState.team, this.displayDriver.baseWidth, this.displayDriver.baseHeight);
         this.ui.setMode(this.uiState);
         break;
       case EventType.UI_TOGGLE:
-        const btn: Button = event.data;
         // TODO clean this up so that we're not searching unessescary (spelling lol) panels
-        btn.toggleIds.forEach((id) => {
-          this.ui.curMode.forEach((child) => child.toggleChild(id));
-        });
+        console.log(event.data);
         break;
       case EventType.CHOOSE_ACTIVE_CHARACTER:
-        const characterBtn: Button = event.data;
-        // FIND A WAY TO HANDLE ATTAKS HERE
+        console.log(event);
+        break;
     }
   }
 }
@@ -198,9 +197,9 @@ class Vector {
 
 enum SpriteID {
   Knight = "Knight",
-  BlueWitch = "BlueWitch",
+  BlueWitch = "Blue Witch",
   Necromancer = "Necromancer",
-  StageFloor = "StageFloor",
+  StageFloor = "Stage Floor",
   Underground = "Underground",
 }
 
@@ -226,7 +225,7 @@ const Characters = {
     offset: new Vector(0, 0),
     moves: [
       { name: "Slash", damage: 10 },
-      { name: "Defend", damage: 0},
+      { name: "Defend", damage: 0 },
     ],
     id: SpriteID.Knight,
     name: "Knight",
@@ -467,7 +466,7 @@ class DisplayDriver {
   }
 
   private drawUI(uiState: UIMode) {
-    this.ui.curMode.forEach((element) => {
+    this.ui.curMode.children.forEach((element) => {
       if (!element.visible) return
 
       switch (true) {
@@ -543,8 +542,7 @@ class EventBus {
   }
 }
 
-
-function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement[] {
+function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement {
   const pnlHeight = Math.floor(baseHeight * 0.4);
   const pnlWidth = Math.floor(pnlHeight * 0.5);
   const x = Math.floor(
@@ -560,26 +558,23 @@ function constructTitleScreen(baseWidth: number, baseHeight: number, generateID:
     y,
     pnlWidth,
     pnlHeight,
-    null,
-    []
   );
 
-  // should export this later to maybe some persistence files
   const mainScreenButtons = [
     {
-      event: [EventType.CREATE_ROOM],
+      events: [{ event: EventType.CREATE_ROOM, data: null }],
       text: "Create Room",
     },
     {
-      event: [EventType.CHANGE_TEAM],
+      events: [{ event: EventType.CHANGE_TEAM, data: null }],
       text: "Join Room",
     },
     {
-      event: [EventType.CHANGE_TEAM],
+      events: [{ event: EventType.CHANGE_TEAM, data: null }],
       text: "Change Team",
     },
     {
-      event: [EventType.UNUSED],
+      events: [{ event: EventType.UNUSED, data: null }],
       text: "Unused",
     },
   ];
@@ -589,7 +584,8 @@ function constructTitleScreen(baseWidth: number, baseHeight: number, generateID:
   const btnHeight = (pnlHeight / mainScreenButtons.length) - padding;
   mainScreenButtons.forEach((btn, i) => {
     const btnY = (y + ((btnHeight + padding) * i));
-    const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, mainPanel, [], btn.event, btn.text);
+    const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, btn.events, btn.text);
+    childBtn.parent = mainPanel;
     childBtn.backgroundColor = BackgroundColor.IvoryWhite;
     childBtn.borderColor = BorderColor.Black;
     childBtn.borderWidth = BorderWidth.Med;
@@ -597,17 +593,17 @@ function constructTitleScreen(baseWidth: number, baseHeight: number, generateID:
   });
 
 
-  return [mainPanel];
+  return mainPanel;
 }
 
 function evenlySpaceButtons(
   generateID: () => number,
-  parentX: number,         
-  parentY: number,         
-  parentWidth: number,     
-  parentHeight: number,    
-  btnCount: number,        
-  padding: number          
+  parentX: number,
+  parentY: number,
+  parentWidth: number,
+  parentHeight: number,
+  btnCount: number,
+  padding: number
 ): Button[] {
 
   const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
@@ -622,15 +618,13 @@ function evenlySpaceButtons(
     const btnY = parentY + Math.floor((parentHeight - btnHeight) / 2); // Center Y position
 
     const btn = new Button(
-      generateID(),   
-      btnX,           
-      btnY,           
-      btnWidth,       
-      btnHeight,      
-      null,           
-      [],             
-      [EventType.UI_TOGGLE], 
-      "",      
+      generateID(),
+      btnX,
+      btnY,
+      btnWidth,
+      btnHeight,
+      [],
+      "",
     );
 
     btns.push(btn);
@@ -639,20 +633,19 @@ function evenlySpaceButtons(
   return btns;
 }
 
-function setBackButton(btn: Button, ...toggleIds: number[]) {
+function setBackButton(btn: Button) {
   btn.backgroundColor = BackgroundColor.LightGrey;
   btn.borderColor = BorderColor.Black;
   btn.borderWidth = BorderWidth.Med;
   btn.text = "Back";
-  btn.addToggleId(...toggleIds);
 }
 
 function constructGameScreen(
-  team: Character[], 
-  baseWidth: number, 
-  baseHeight: number, 
+  team: Character[],
+  baseWidth: number,
+  baseHeight: number,
   generateID: () => number
-): { screens: UIElement[], charactersid: number, attacksid: number, targetsid: number } {
+): { screens: UIElement[], charactersid: number } {
   // x, y, width, height, parent, children
   let pnlWidth = baseWidth * 0.7;
   let pnlHeight = Characters.StageFloor.size.y;
@@ -664,33 +657,11 @@ function constructGameScreen(
     y,
     pnlWidth,
     pnlHeight,
-    null,
-    [],
   );
 
   mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
   mainPanel.borderColor = BorderColor.Black;
   mainPanel.borderWidth = BorderWidth.Med;
-
-  const targets = new Panel(
-    generateID(),
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-    null,
-    [],
-  );
-
-  const attacks = new Panel(
-    generateID(),
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-    null,
-    [],
-  );
 
   const characters = new Panel(
     generateID(),
@@ -698,67 +669,7 @@ function constructGameScreen(
     y,
     pnlWidth,
     pnlHeight,
-    null,
-    [],
-  )
-
-  const targetBtns = evenlySpaceButtons(
-    generateID,
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-    4,
-    4
   );
-
-  let btnCount = 4;
-  const padding = 4;
-
-  const btnWidth = Math.floor((pnlWidth - (padding * (btnCount + 1))) / btnCount);
-  const btnHeight = Math.floor(pnlHeight * 0.8);
-
-  // Compute horizontal starting point to center all buttons
-  const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
-  const startX = Math.floor((pnlWidth - totalButtonsWidth) / 2);
-
-  setBackButton(targetBtns[0], targets.id, attacks.id);
-  for (let i = 1; i < targetBtns.length; i++) {
-    const btn = targetBtns[i];
-    btn.backgroundColor = BackgroundColor.IvoryWhite;
-    btn.borderWidth = BorderWidth.Med;
-    btn.borderColor = BorderColor.Black;
-    btn.text = team[i - 1].name;
-    btn.addToggleId(targets.id, characters.id);
-  }
-
-  targets.addChild(...targetBtns)
-  targets.toggle();
-  mainPanel.addChild(targets);
-
-  const attackBtns = evenlySpaceButtons(
-    generateID,
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-    3,
-    4
-  );
-  
-  setBackButton(attackBtns[0], characters.id, attacks.id);
-  for (let i = 1; i < attackBtns.length; i++) {
-    const btn = attackBtns[i];
-    btn.backgroundColor = BackgroundColor.IvoryWhite;
-    btn.borderWidth = BorderWidth.Med;
-    btn.borderColor = BorderColor.Black;
-    btn.text = "Not set";
-    btn.addToggleId(targets.id, attacks.id);
-  }
-
-  attacks.addChild(...attackBtns)
-  attacks.toggle();
-  mainPanel.addChild(attacks);
 
   const characterBtns = evenlySpaceButtons(
     generateID,
@@ -769,25 +680,25 @@ function constructGameScreen(
     3,
     4
   );
-  
+
   for (let i = 0; i < characterBtns.length; i++) {
     const btn = characterBtns[i];
     btn.text = `${team[i].name}`;
     btn.backgroundColor = BackgroundColor.IvoryWhite;
     btn.borderWidth = BorderWidth.Med;
     btn.borderColor = BorderColor.Black;
-    btn.addToggleId(characters.id, attacks.id);
-    btn.addEvents(EventType.CHOOSE_ACTIVE_CHARACTER);  
+    btn.addEvents({
+      event: EventType.CHOOSE_ACTIVE_CHARACTER,
+      data: team[i]
+    });
   }
 
-  characters.addChild(...characterBtns)
+  characters.addChild(...characterBtns);
   mainPanel.addChild(characters);
 
-return {
+  return {
     screens: [mainPanel],
     charactersid: characters.id,
-    attacksid: attacks.id,
-    targetsid: targets.id
   };
 }
 
@@ -806,40 +717,80 @@ function initIdGenerator(): () => number {
   }
 }
 
+function constructScreen(ui: UI): void {
+  ui.Begin();
+  ui.beginMenu();
+  ui.button();
+  ui.button();
+  ui.button();
+  ui.endMenu();
+  ui.End();
+}
+
 class UI {
   private eventBus: EventBus;
-  private idGenerator: () => number;
+  private generateID: () => number;
 
-  public curMode: UIElement[];
-  public screens: { [key in UIMode]: UIElement[] }
-  public gameScreenData: { charID: number, atkID: number, tgtID: number } | null;
+  public curMode: UIElement;
+  public screens: { [key in UIMode]: UIElement }
+
+  public root: Panel;
+  public currentElement: UIElement | null;
 
   constructor(eventBus: EventBus, baseWidth: number, baseHeight: number) {
     this.eventBus = eventBus;
-    this.idGenerator = initIdGenerator();
+    this.generateID = initIdGenerator();
     this.screens = {
-      [UIMode.TitleScreen]: constructTitleScreen(baseWidth, baseHeight, this.idGenerator),
-      [UIMode.Waiting]: [],
-      [UIMode.InGame]: [],
+      [UIMode.TitleScreen]: constructTitleScreen(baseWidth, baseHeight, this.generateID),
+      [UIMode.Waiting]: new Panel(this.generateID(), 0, 0, baseWidth, baseHeight),
+      [UIMode.InGame]: new Panel(this.generateID(), 0, 0, baseWidth, baseHeight),
     };
-    this.curMode = this.screens[UIMode.TitleScreen];
+    this.curMode = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight);
+    this.root = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)
+    this.currentElement = null;
+    constructScreen(this);
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
-      for (const element of this.curMode) {
+      for (const element of this.curMode.children) {
         const btn = this.buttonClicked(element, mousePosition);
 
         if (btn) {
           console.log(btn.text);
           const events = btn.eventList();
           events.forEach((e) => {
-            const event = ConstructEvent(e, btn);
-            this.eventBus.send(event);
+            this.eventBus.send(e);
           });
           break;
         }
       }
     });
-    this.gameScreenData = null;
+  }
+
+  public Begin(): void {
+    this.currentElement = this.root;
+  }
+
+  public beginMenu(): void {
+    const child = new Panel(this.generateID(), 0, 0, 0, 0);
+    child.parent = this.currentElement;
+    this.currentElement?.addChildren(child);
+    this.currentElement = child;
+  }
+
+  public button(): void {
+    const btn = new Button(this.generateID(), 0, 0, 0, 0, [], "");
+    btn.parent = this.currentElement;
+    this.currentElement!.addChildren(btn);
+  }
+
+  public endMenu(): void {
+    this.currentElement = this.currentElement!.parent;
+  }
+
+  // can possibly extend this if I want to have multiple UI screens
+  // for now just going to leave as this
+  public End(): void {
+    this.currentElement = null;
   }
 
   public setMode(mode: UIMode) {
@@ -885,26 +836,6 @@ class UI {
     return { x: x, y: y };
   }
 
-  public populateButtonData(team: Character[], baseWidth: number, baseHeight: number) {
-    const { screens: gameScreens, charactersid: charID, attacksid: atkID, targetsid: tgtID } = constructGameScreen(team, baseWidth, baseHeight, this.idGenerator);
-    this.screens[2] = gameScreens;
-    this.gameScreenData = {
-      charID: charID,
-      atkID: atkID,
-      tgtID: tgtID,
-    }
-  }
-
-  public populateAttacks(character: Character) {
-    const atks = this.screens[2].find(c => c.id == this.gameScreenData?.atkID);
-    for (let i = 1; i < (atks?.children.length ?? 0); i++) {
-      const btn = atks?.children[i];
-      if (btn instanceof Button) {
-        btn.text = character.attack[i-1].name; 
-      }
-    }
-  }
-
 }
 
 enum BackgroundColor {
@@ -918,6 +849,12 @@ enum BorderWidth {
 
 enum BorderColor {
   Black = "black"
+}
+
+type UIElementOpts = {
+  borderWidth: number;
+  borderColor: string;
+  backgroundColor: string;
 }
 
 class UIElement {
@@ -939,20 +876,18 @@ class UIElement {
     y: number,
     width: number,
     height: number,
-    parent: UIElement | null,
-    children: UIElement[]
   ) {
     this.id = id;
     this.x = x;
     this.y = y;
     this.width = width;
     this.height = height;
-    this.parent = parent;
-    this.children = children;
+    this.parent = null;
+    this.children = [];
     this.borderWidth = BorderWidth.Med;
     this.borderColor = "rgba(0, 0, 0, 0)";
     this.backgroundColor = "rgba(0, 0, 0, 0)";
-    this.visible = true
+    this.visible = true;
   }
 
   contains(x: number, y: number): boolean {
@@ -964,6 +899,16 @@ class UIElement {
     );
   }
 
+  addChildren(...children: UIElement[]) {
+    this.children.push(...children);
+  }
+
+  // this has potential to mess up some state
+  // ex 
+  // parentpanel -> btn, btn, childpanel -> btn, btn
+  // toggle called on childpanel, toggle called on parent panel
+  // just be aware. not a problem now since were toggling at the top
+  // level but just something to keep on the radar
   toggle(): void {
     this.visible = !this.visible;
     this.children.forEach((child) => child.toggle());
@@ -988,10 +933,8 @@ class Panel extends UIElement {
     y: number,
     width: number,
     height: number,
-    parent: UIElement | null,
-    children: UIElement[]
   ) {
-    super(id, x, y, width, height, parent, children);
+    super(id, x, y, width, height);
   }
 
   addChild(...child: UIElement[]): void {
@@ -1005,8 +948,8 @@ class Panel extends UIElement {
 
 class Button extends UIElement {
   text: string;
-  events: EventType[];
-  toggleIds: number[];
+  events: event[];
+  data: any;
 
   constructor(
     id: number,
@@ -1014,26 +957,19 @@ class Button extends UIElement {
     y: number,
     width: number,
     height: number,
-    parent: UIElement | null,
-    children: UIElement[],
-    events: EventType[],
+    events: event[],
     text: string
   ) {
-    super(id, x, y, width, height, parent, children);
+    super(id, x, y, width, height);
     this.events = events;
     this.text = text;
-    this.toggleIds = [];
   }
 
-  eventList(): EventType[] {
+  eventList(): event[] {
     return this.events;
   }
 
-  addToggleId(...ids: number[]) {
-    this.toggleIds.push(...ids);
-  }
-
-  addEvents(...events: EventType[]) {
+  addEvents(...events: event[]) {
     this.events.push(...events);
   }
 }
@@ -1050,7 +986,7 @@ class Modal extends UIElement {
     parent: UIElement | null,
     text: string
   ) {
-    super(id, x, y, width, height, parent, []);
+    super(id, x, y, width, height);
     this.text = text;
   }
 
