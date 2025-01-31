@@ -727,12 +727,32 @@ function constructScreen(ui: UI): void {
   ui.End();
 }
 
+class RenderStack {
+  stack: UIElement[];
+
+  constructor(...elements: UIElement[]) {
+    this.stack = [...elements];
+  }
+  
+  push(element: UIElement) {
+    this.stack.push(element); 
+  }
+
+  pop(): UIElement | undefined {
+    return this.stack.pop();
+  }
+
+  peek(): UIElement | undefined {
+    return this.stack[-1];
+  }
+}
+
 class UI {
   private eventBus: EventBus;
   private generateID: () => number;
 
   public curMode: UIElement;
-  public screens: { [key in UIMode]: UIElement }
+  public screens: { [key in UIMode]: RenderStack }
 
   public root: Panel;
   public currentElement: UIElement | null;
@@ -741,9 +761,9 @@ class UI {
     this.eventBus = eventBus;
     this.generateID = initIdGenerator();
     this.screens = {
-      [UIMode.TitleScreen]: constructTitleScreen(baseWidth, baseHeight, this.generateID),
-      [UIMode.Waiting]: new Panel(this.generateID(), 0, 0, baseWidth, baseHeight),
-      [UIMode.InGame]: new Panel(this.generateID(), 0, 0, baseWidth, baseHeight),
+      [UIMode.TitleScreen]: new RenderStack(constructTitleScreen(baseWidth, baseHeight, this.generateID)),
+      [UIMode.Waiting]: new RenderStack(new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)),
+      [UIMode.InGame]: new RenderStack(new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)),
     };
     this.curMode = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight);
     this.root = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)
@@ -766,7 +786,10 @@ class UI {
     });
   }
 
-  public Begin(): void {
+  // START HERE. REMEMBER RENDERSTACK AND NEW SUBMENU CLASS. WE'RE RENDERING
+  // ALL CHILDREN AND IF A SUBMENU IS PRESSED, THE NEXT MENU SHOULD BE PUSHED
+  // TO THE STACK TO BE RENDER. THE BACK BUTTON WILL POP. YOU GOT THIS!!!!!!
+  public Begin(mode: UIMode): void {
     this.currentElement = this.root;
   }
 
@@ -796,10 +819,10 @@ class UI {
   public setMode(mode: UIMode) {
     switch (mode) {
       case (UIMode.TitleScreen):
-        this.curMode = this.screens[UIMode.TitleScreen];
+        this.curMode = this.screens[UIMode.TitleScreen].peek()!;
         break;
       case (UIMode.InGame):
-        this.curMode = this.screens[UIMode.InGame];
+        this.curMode = this.screens[UIMode.InGame].peek()!;
         break;
     }
   }
@@ -944,6 +967,22 @@ class Panel extends UIElement {
   // addScreen(id: number, screen: UIElement[]): void {
   //   this.screens.set(id, screen);
   // }
+}
+
+class SubMenu extends UIElement {
+  text: string; 
+  
+  constructor(
+    id: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    text: string
+  ) {
+    super(id, x, y, width, height);
+    this.text = text;
+  }
 }
 
 class Button extends UIElement {
