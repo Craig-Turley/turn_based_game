@@ -466,7 +466,8 @@ class DisplayDriver {
   }
 
   private drawUI(uiState: UIMode) {
-    this.ui.curMode.children.forEach((element) => {
+    const curScreen = this.ui.curMode.peek()!;
+    curScreen.children.forEach((element) => {
       if (!element.visible) return
 
       switch (true) {
@@ -640,67 +641,67 @@ function setBackButton(btn: Button) {
   btn.text = "Back";
 }
 
-function constructGameScreen(
-  team: Character[],
-  baseWidth: number,
-  baseHeight: number,
-  generateID: () => number
-): { screens: UIElement[], charactersid: number } {
-  // x, y, width, height, parent, children
-  let pnlWidth = baseWidth * 0.7;
-  let pnlHeight = Characters.StageFloor.size.y;
-  let x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
-  let y = Math.floor((baseHeight) - (pnlHeight - 3));
-  const mainPanel = new Panel(
-    generateID(),
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-  );
-
-  mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
-  mainPanel.borderColor = BorderColor.Black;
-  mainPanel.borderWidth = BorderWidth.Med;
-
-  const characters = new Panel(
-    generateID(),
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-  );
-
-  const characterBtns = evenlySpaceButtons(
-    generateID,
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-    3,
-    4
-  );
-
-  for (let i = 0; i < characterBtns.length; i++) {
-    const btn = characterBtns[i];
-    btn.text = `${team[i].name}`;
-    btn.backgroundColor = BackgroundColor.IvoryWhite;
-    btn.borderWidth = BorderWidth.Med;
-    btn.borderColor = BorderColor.Black;
-    btn.addEvents({
-      event: EventType.CHOOSE_ACTIVE_CHARACTER,
-      data: team[i]
-    });
-  }
-
-  characters.addChild(...characterBtns);
-  mainPanel.addChild(characters);
-
-  return {
-    screens: [mainPanel],
-    charactersid: characters.id,
-  };
-}
+// function constructGameScreen(
+//   team: Character[],
+//   baseWidth: number,
+//   baseHeight: number,
+//   generateID: () => number
+// ): { screens: UIElement[], charactersid: number } {
+//   // x, y, width, height, parent, children
+//   let pnlWidth = baseWidth * 0.7;
+//   let pnlHeight = Characters.StageFloor.size.y;
+//   let x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
+//   let y = Math.floor((baseHeight) - (pnlHeight - 3));
+//   const mainPanel = new Panel(
+//     generateID(),
+//     x,
+//     y,
+//     pnlWidth,
+//     pnlHeight,
+//   );
+//
+//   mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
+//   mainPanel.borderColor = BorderColor.Black;
+//   mainPanel.borderWidth = BorderWidth.Med;
+//
+//   const characters = new Panel(
+//     generateID(),
+//     x,
+//     y,
+//     pnlWidth,
+//     pnlHeight,
+//   );
+//
+//   const characterBtns = evenlySpaceButtons(
+//     generateID,
+//     x,
+//     y,
+//     pnlWidth,
+//     pnlHeight,
+//     3,
+//     4
+//   );
+//
+//   for (let i = 0; i < characterBtns.length; i++) {
+//     const btn = characterBtns[i];
+//     btn.text = `${team[i].name}`;
+//     btn.backgroundColor = BackgroundColor.IvoryWhite;
+//     btn.borderWidth = BorderWidth.Med;
+//     btn.borderColor = BorderColor.Black;
+//     btn.addEvents({
+//       event: EventType.CHOOSE_ACTIVE_CHARACTER,
+//       data: team[i]
+//     });
+//   }
+//
+//   characters.addChild(...characterBtns);
+//   mainPanel.addChild(characters);
+//
+//   return {
+//     screens: [mainPanel],
+//     charactersid: characters.id,
+//   };
+// }
 
 enum UIMode {
   TitleScreen,
@@ -717,13 +718,37 @@ function initIdGenerator(): () => number {
   }
 }
 
+
+// type UIElementOpts = {
+//   borderWidth: number;
+//   borderColor: string;
+//   backgroundColor: string;
+// }
+
+enum BackgroundColor {
+  IvoryWhite = "#FFFFF0",
+  LightGrey = "#D3D3D3"
+}
+
+enum BorderWidth {
+  Med = 3
+}
+
+enum BorderColor {
+  Black = "black"
+}
+
+const defaultOpts = {
+  borderWidth: BorderWidth.Med,
+  borderColor: BorderColor.Black,
+  backgroundColor: BackgroundColor.IvoryWhite,
+}
+
 function constructScreen(ui: UI): void {
-  ui.Begin();
-  ui.beginMenu();
-  ui.button();
-  ui.button();
-  ui.button();
-  ui.endMenu();
+  ui.Begin(UIMode.TitleScreen);
+  ui.button(defaultOpts);
+  ui.button(defaultOpts);
+  ui.button(defaultOpts);
   ui.End();
 }
 
@@ -743,7 +768,7 @@ class RenderStack {
   }
 
   peek(): UIElement | undefined {
-    return this.stack[-1];
+    return this.stack[this.stack.length - 1];
   }
 }
 
@@ -751,27 +776,26 @@ class UI {
   private eventBus: EventBus;
   private generateID: () => number;
 
-  public curMode: UIElement;
+  public curMode: RenderStack;
   public screens: { [key in UIMode]: RenderStack }
 
-  public root: Panel;
-  public currentElement: UIElement | null;
+  private currentBuildMode: UIMode;
 
   constructor(eventBus: EventBus, baseWidth: number, baseHeight: number) {
     this.eventBus = eventBus;
     this.generateID = initIdGenerator();
     this.screens = {
-      [UIMode.TitleScreen]: new RenderStack(constructTitleScreen(baseWidth, baseHeight, this.generateID)),
-      [UIMode.Waiting]: new RenderStack(new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)),
-      [UIMode.InGame]: new RenderStack(new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)),
+      [UIMode.TitleScreen]: new RenderStack(),
+      [UIMode.Waiting]: new RenderStack(),
+      [UIMode.InGame]: new RenderStack(),
     };
-    this.curMode = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight);
-    this.root = new Panel(this.generateID(), 0, 0, baseWidth, baseHeight)
-    this.currentElement = null;
+    this.curMode = this.screens[UIMode.TitleScreen];
+    this.currentBuildMode = UIMode.TitleScreen;
     constructScreen(this);
+
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
-      for (const element of this.curMode.children) {
+      for (const element of this.curMode.peek()!.children) {
         const btn = this.buttonClicked(element, mousePosition);
 
         if (btn) {
@@ -790,39 +814,37 @@ class UI {
   // ALL CHILDREN AND IF A SUBMENU IS PRESSED, THE NEXT MENU SHOULD BE PUSHED
   // TO THE STACK TO BE RENDER. THE BACK BUTTON WILL POP. YOU GOT THIS!!!!!!
   public Begin(mode: UIMode): void {
-    this.currentElement = this.root;
+    this.screens[mode].push(new Panel(this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT));
+    this.currentBuildMode = mode;
   }
 
-  public beginMenu(): void {
-    const child = new Panel(this.generateID(), 0, 0, 0, 0);
-    child.parent = this.currentElement;
-    this.currentElement?.addChildren(child);
-    this.currentElement = child;
+  public beginMenu(id: string, name: string): void {
+    const subMenu = new SubMenu(id, 0, 0, 0, 0, name);
+    this.screens[this.currentBuildMode].push(subMenu);
   }
 
-  public button(): void {
+  public button(opts: UIElementOpts): void {
+    const currentElement = this.screens[this.currentBuildMode].peek();
     const btn = new Button(this.generateID(), 0, 0, 0, 0, [], "");
-    btn.parent = this.currentElement;
-    this.currentElement!.addChildren(btn);
+    btn.parent = currentElement!;
+    currentElement!.addChildren(btn);
   }
 
   public endMenu(): void {
-    this.currentElement = this.currentElement!.parent;
+    this.screens[this.currentBuildMode].pop(); 
   }
 
-  // can possibly extend this if I want to have multiple UI screens
-  // for now just going to leave as this
+  // this is where all the position calculation goes
   public End(): void {
-    this.currentElement = null;
   }
 
   public setMode(mode: UIMode) {
     switch (mode) {
       case (UIMode.TitleScreen):
-        this.curMode = this.screens[UIMode.TitleScreen].peek()!;
+        this.curMode = this.screens[UIMode.TitleScreen];
         break;
       case (UIMode.InGame):
-        this.curMode = this.screens[UIMode.InGame].peek()!;
+        this.curMode = this.screens[UIMode.InGame];
         break;
     }
   }
@@ -861,18 +883,6 @@ class UI {
 
 }
 
-enum BackgroundColor {
-  IvoryWhite = "#FFFFF0",
-  LightGrey = "#D3D3D3"
-}
-
-enum BorderWidth {
-  Med = 3
-}
-
-enum BorderColor {
-  Black = "black"
-}
 
 type UIElementOpts = {
   borderWidth: number;
@@ -881,7 +891,7 @@ type UIElementOpts = {
 }
 
 class UIElement {
-  id: number;
+  id: number | string;
   x: number;
   y: number;
   width: number;
@@ -894,7 +904,7 @@ class UIElement {
   backgroundColor: string;
 
   constructor(
-    id: number,
+    id: number | string,
     x: number,
     y: number,
     width: number,
@@ -973,7 +983,7 @@ class SubMenu extends UIElement {
   text: string; 
   
   constructor(
-    id: number,
+    id: number | string,
     x: number,
     y: number,
     width: number,

@@ -212,3 +212,44 @@ Date: 01/28/25
     
     * Start working game loop programming, attacks, chossing targets, etc
     * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
+
+Date: 1/29 - 1/30 /25
+
+  - Did some remodling on the UI. Forgot to record it here
+
+Date: 1/31/25
+
+  Goals:
+    
+    * Add basic api for building out UI interface 
+
+  Tasks Worked On: 
+ 
+    * Added Begin, beginMenu, button, endMenu, and End functions for building out UI. Still unsure about the implementation but it works 
+  
+  Session highlights:  
+    
+    What went well: 
+
+      * Was able to construct a menu using the UI api I wrote 
+
+    What didn't go well: 
+
+      * I wasn't able to think of a good way to being rendering these items 
+
+  Key learnings:
+
+    * Submenus can be implemented using stack based navigation very intuitiveyl (i can spell) 
+
+  Random thoughts:
+
+    * Consider either adding a Column and Row element, or adding this directly to the panel class. This will allow for 
+      the user to add rows and columns to ui
+
+  Next steps:
+    
+    * extend ui to account for submenus and find a way to determine positions so renderer can render the UI
+
+    * Start working game loop programming, attacks, chossing targets, etc
+    * Animate characters idle positions and attacks. Find effecient way to deal with multiple sprite images
+  
