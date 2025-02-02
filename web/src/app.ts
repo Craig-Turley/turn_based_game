@@ -792,7 +792,6 @@ class UI {
     this.curMode = this.screens[UIMode.TitleScreen];
     this.currentBuildMode = UIMode.TitleScreen;
     constructScreen(this);
-
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
       for (const element of this.curMode.peek()!.children) {
@@ -812,15 +811,18 @@ class UI {
 
   // START HERE. REMEMBER RENDERSTACK AND NEW SUBMENU CLASS. WE'RE RENDERING
   // ALL CHILDREN AND IF A SUBMENU IS PRESSED, THE NEXT MENU SHOULD BE PUSHED
-  // TO THE STACK TO BE RENDER. THE BACK BUTTON WILL POP. YOU GOT THIS!!!!!!
+  // TO THE STACK TO BE RENDERED. THE BACK BUTTON WILL POP. YOU GOT THIS!!!!!!
   public Begin(mode: UIMode): void {
     this.screens[mode].push(new Panel(this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT));
     this.currentBuildMode = mode;
   }
 
-  public beginMenu(id: string, name: string): void {
-    const subMenu = new SubMenu(id, 0, 0, 0, 0, name);
-    this.screens[this.currentBuildMode].push(subMenu);
+  public beginMenu(id: string, name: string, opts: UIElementOpts): void {
+    const currentElement = this.screens[this.currentBuildMode].peek()!;
+    const menu = new Menu(id, 0, 0, 0, 0, name, opts);
+    menu.parent = currentElement;
+    currentElement.addChildren(menu);
+    this.screens[this.currentBuildMode].push(menu);
   }
 
   public button(opts: UIElementOpts): void {
@@ -836,6 +838,7 @@ class UI {
 
   // this is where all the position calculation goes
   public End(): void {
+    console.log(this.screens[this.currentBuildMode]);
   }
 
   public setMode(mode: UIMode) {
@@ -979,7 +982,7 @@ class Panel extends UIElement {
   // }
 }
 
-class SubMenu extends UIElement {
+class Menu extends UIElement {
   text: string; 
   
   constructor(
@@ -988,10 +991,14 @@ class SubMenu extends UIElement {
     y: number,
     width: number,
     height: number,
-    text: string
+    text: string,
+    opts: UIElementOpts
   ) {
     super(id, x, y, width, height);
     this.text = text;
+    this.borderColor = opts.borderColor;
+    this.backgroundColor = opts.backgroundColor;
+    this.borderWidth = opts.borderWidth;
   }
 }
 
