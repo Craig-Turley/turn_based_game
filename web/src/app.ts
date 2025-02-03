@@ -7,6 +7,7 @@ enum EventType {
   PLAY,
   CHANGE_TEAM,
   UI_TOGGLE,
+  UI_UNTOGGLE,
   UNUSED,
   CHOOSE_ACTIVE_CHARACTER
 }
@@ -129,8 +130,12 @@ class Game {
         this.ui.setMode(this.uiState);
         break;
       case EventType.UI_TOGGLE:
-        // TODO clean this up so that we're not searching unessescary (spelling lol) panels
-        console.log(event.data);
+        this.ui.curMode.push(event.data[0]);
+        console.log("Pushing", event.data);
+        console.log(this.ui.curMode.stack);
+        break;
+      case EventType.UI_UNTOGGLE:
+        this.ui.curMode.pop();
         break;
       case EventType.CHOOSE_ACTIVE_CHARACTER:
         console.log(event);
@@ -469,15 +474,7 @@ class DisplayDriver {
     const curScreen = this.ui.curMode.peek()!;
     curScreen.children.forEach((element) => {
       if (!element.visible) return
-
-      switch (true) {
-        case element instanceof Button:
-          this.drawButton(element as Button);
-          break;
-        case element instanceof Panel:
-          this.drawPanel(element as Panel)
-          break;
-      }
+      this.drawPanel(element as Panel);
     });
   }
 
@@ -519,14 +516,10 @@ class DisplayDriver {
     this.ctx.stroke();
 
     pnl.children.forEach((child) => {
-      switch (true) {
-        case child instanceof Button:
-          this.drawButton(child as Button);
-          break;
-        case child instanceof Panel:
-          this.drawPanel(child as Panel)
-          break;
+      if (child instanceof Menu || child instanceof Button) {
+        this.drawButton(child as Button);
       }
+
     });
   }
 }
@@ -543,96 +536,97 @@ class EventBus {
   }
 }
 
-function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement {
-  const pnlHeight = Math.floor(baseHeight * 0.4);
-  const pnlWidth = Math.floor(pnlHeight * 0.5);
-  const x = Math.floor(
-    (baseWidth * 0.5) - (pnlWidth * 0.5)
-  );
-  const y = Math.floor(
-    (baseHeight * 0.5) - (pnlHeight * 0.5)
-  );
+// function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement {
+//   const pnlHeight = Math.floor(baseHeight * 0.4);
+//   const pnlWidth = Math.floor(pnlHeight * 0.5);
+//   const x = Math.floor(
+//     (baseWidth * 0.5) - (pnlWidth * 0.5)
+//   );
+//   const y = Math.floor(
+//     (baseHeight * 0.5) - (pnlHeight * 0.5)
+//   );
+//
+//   const mainPanel = new Panel(
+//     generateID(),
+//     x,
+//     y,
+//     pnlWidth,
+//     pnlHeight,
+//     defaultOpts
+//   );
+//
+//   const mainScreenButtons = [
+//     {
+//       events: [{ event: EventType.CREATE_ROOM, data: null }],
+//       text: "Create Room",
+//     },
+//     {
+//       events: [{ event: EventType.CHANGE_TEAM, data: null }],
+//       text: "Join Room",
+//     },
+//     {
+//       events: [{ event: EventType.CHANGE_TEAM, data: null }],
+//       text: "Change Team",
+//     },
+//     {
+//       events: [{ event: EventType.UNUSED, data: null }],
+//       text: "Unused",
+//     },
+//   ];
+//
+//   // some padding for the buttons
+//   const padding = 4;
+//   const btnHeight = (pnlHeight / mainScreenButtons.length) - padding;
+//   mainScreenButtons.forEach((btn, i) => {
+//     const btnY = (y + ((btnHeight + padding) * i));
+//     const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, btn.events, btn.text);
+//     childBtn.parent = mainPanel;
+//     childBtn.backgroundColor = BackgroundColor.IvoryWhite;
+//     childBtn.borderColor = BorderColor.Black;
+//     childBtn.borderWidth = BorderWidth.Med;
+//     mainPanel.addChild(childBtn);
+//   });
+//
+//
+//   return mainPanel;
+// }
 
-  const mainPanel = new Panel(
-    generateID(),
-    x,
-    y,
-    pnlWidth,
-    pnlHeight,
-  );
-
-  const mainScreenButtons = [
-    {
-      events: [{ event: EventType.CREATE_ROOM, data: null }],
-      text: "Create Room",
-    },
-    {
-      events: [{ event: EventType.CHANGE_TEAM, data: null }],
-      text: "Join Room",
-    },
-    {
-      events: [{ event: EventType.CHANGE_TEAM, data: null }],
-      text: "Change Team",
-    },
-    {
-      events: [{ event: EventType.UNUSED, data: null }],
-      text: "Unused",
-    },
-  ];
-
-  // some padding for the buttons
-  const padding = 4;
-  const btnHeight = (pnlHeight / mainScreenButtons.length) - padding;
-  mainScreenButtons.forEach((btn, i) => {
-    const btnY = (y + ((btnHeight + padding) * i));
-    const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, btn.events, btn.text);
-    childBtn.parent = mainPanel;
-    childBtn.backgroundColor = BackgroundColor.IvoryWhite;
-    childBtn.borderColor = BorderColor.Black;
-    childBtn.borderWidth = BorderWidth.Med;
-    mainPanel.addChild(childBtn);
-  });
-
-
-  return mainPanel;
-}
-
-function evenlySpaceButtons(
-  generateID: () => number,
-  parentX: number,
-  parentY: number,
-  parentWidth: number,
-  parentHeight: number,
-  btnCount: number,
-  padding: number
-): Button[] {
-
-  const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
-  const btnHeight = Math.floor(parentHeight * 0.8);
-
-  const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
-  const startX = parentX + Math.floor((parentWidth - totalButtonsWidth) / 2);
-
-  const btns: Button[] = [];
-  for (let i = 0; i < btnCount; i++) {
-    const btnX = startX + i * (btnWidth + padding); // Compute X position for the button
-    const btnY = parentY + Math.floor((parentHeight - btnHeight) / 2); // Center Y position
-
-    const btn = new Button(
-      generateID(),
-      btnX,
-      btnY,
-      btnWidth,
-      btnHeight,
-      [],
-      "",
-    );
-
-    btns.push(btn);
-  }
-
-  return btns;
-}
+// function evenlySpaceButtons(
+//   generateID: () => number,
+//   parentX: number,
+//   parentY: number,
+//   parentWidth: number,
+//   parentHeight: number,
+//   btnCount: number,
+//   padding: number
+// ): Button[] {
+//
+//   const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
+//   const btnHeight = Math.floor(parentHeight * 0.8);
+//
+//   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
+//   const startX = parentX + Math.floor((parentWidth - totalButtonsWidth) / 2);
+//
+//   const btns: Button[] = [];
+//   for (let i = 0; i < btnCount; i++) {
+//     const btnX = startX + i * (btnWidth + padding); // Compute X position for the button
+//     const btnY = parentY + Math.floor((parentHeight - btnHeight) / 2); // Center Y position
+//
+//     const btn = new Button(
+//       generateID(),
+//       btnX,
+//       btnY,
+//       btnWidth,
+//       btnHeight,
+//       [],
+//       "",
+//     );
+//
+//     btns.push(btn);
+//   }
+//
+//   return btns;
+// }
 
 function setBackButton(btn: Button) {
   btn.backgroundColor = BackgroundColor.LightGrey;
@@ -738,18 +732,95 @@ enum BorderColor {
   Black = "black"
 }
 
+type UIElementOpts = {
+  borderWidth: number;
+  borderColor: string;
+  backgroundColor: string;
+  padding: number;
+  alignment: Alignment;
+}
+
+enum Alignment {
+  Vertical,
+  Horizontal
+}
+
 const defaultOpts = {
+  borderWidth: 0,
+  borderColor: "rgba(0,0,0,0)",
+  backgroundColor: "rgba(0,0,0,0)",
+  padding: 0,
+  alignment: Alignment.Vertical,
+}
+
+const defaultButtonOpts = {
   borderWidth: BorderWidth.Med,
   borderColor: BorderColor.Black,
   backgroundColor: BackgroundColor.IvoryWhite,
+  padding: 0,
+  alignment: Alignment.Vertical
 }
 
-function constructScreen(ui: UI): void {
-  ui.Begin(UIMode.TitleScreen);
-  ui.button(defaultOpts);
-  ui.button(defaultOpts);
-  ui.button(defaultOpts);
+const defaultPanelOpts = {
+  ...defaultOpts,
+  backgroundColor: BackgroundColor.IvoryWhite,
+  borderColor: BorderColor.Black,
+  borderWidth: BorderWidth.Med
+};
+
+/*
+  ui.Begin();
+    // centered with aspectRatio of 1.5
+    ui.beginPanel();
+      ui.button();
+      ui.button();
+      ui.button();
+    ui.endPanel();
   ui.End();
+* */
+
+function constructScreen(ui: UI): void {
+  const aspectRatio = 1.5;
+  let pnlHeight = Math.floor(BASE_HEIGHT * 0.5);
+  let pnlWidth = Math.floor(pnlHeight / aspectRatio);
+
+  ui.Begin(UIMode.TitleScreen);
+  ui.beginPanel(defaultOpts, ((BASE_WIDTH * 0.5) - (pnlWidth * 0.5)), ((BASE_HEIGHT * 0.5) - (pnlHeight * 0.5)), pnlWidth, pnlHeight);
+  ui.button(defaultButtonOpts, "Make Room", [ConstructEvent(EventType.CREATE_ROOM, "")]);
+  ui.button(defaultButtonOpts, "Join Room", [ConstructEvent(EventType.JOIN_ROOM, "")]);
+  ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
+  ui.endPanel();
+  ui.End();
+
+  // end title screen
+  pnlWidth = BASE_WIDTH * 0.7;
+  pnlHeight = Characters.StageFloor.size.y;
+  let x = Math.floor((BASE_WIDTH / 2) - (pnlWidth / 2));
+  let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
+
+  ui.Begin(UIMode.InGame);
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+
+  ui.beginMenu("knightButton", "Knight", defaultButtonOpts);
+
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  ui.button(defaultButtonOpts, "Target Knight", []);
+  ui.endPanel();
+
+  ui.endMenu();
+
+  ui.beginMenu("witchButton", "Witch", defaultButtonOpts);
+
+  ui.endMenu();
+
+  ui.beginMenu("necromancerButton", "Necromancer", defaultButtonOpts);
+
+  ui.endMenu();
+
+  ui.endPanel();
+  ui.End();
+
 }
 
 class RenderStack {
@@ -758,9 +829,9 @@ class RenderStack {
   constructor(...elements: UIElement[]) {
     this.stack = [...elements];
   }
-  
+
   push(element: UIElement) {
-    this.stack.push(element); 
+    this.stack.push(element);
   }
 
   pop(): UIElement | undefined {
@@ -797,7 +868,7 @@ class UI {
       for (const element of this.curMode.peek()!.children) {
         const btn = this.buttonClicked(element, mousePosition);
 
-        if (btn) {
+        if (btn instanceof Button) {
           console.log(btn.text);
           const events = btn.eventList();
           events.forEach((e) => {
@@ -805,15 +876,17 @@ class UI {
           });
           break;
         }
+
+        if (btn instanceof Menu) {
+          this.eventBus.send(btn.toggleEvent);
+          break;
+        }
       }
     });
   }
 
-  // START HERE. REMEMBER RENDERSTACK AND NEW SUBMENU CLASS. WE'RE RENDERING
-  // ALL CHILDREN AND IF A SUBMENU IS PRESSED, THE NEXT MENU SHOULD BE PUSHED
-  // TO THE STACK TO BE RENDERED. THE BACK BUTTON WILL POP. YOU GOT THIS!!!!!!
   public Begin(mode: UIMode): void {
-    this.screens[mode].push(new Panel(this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT));
+    this.screens[mode].push(new Panel(this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT, defaultOpts));
     this.currentBuildMode = mode;
   }
 
@@ -825,20 +898,86 @@ class UI {
     this.screens[this.currentBuildMode].push(menu);
   }
 
-  public button(opts: UIElementOpts): void {
+  public endMenu(): void {
+    this.screens[this.currentBuildMode].pop();
+  }
+
+  public button(opts: UIElementOpts, text: string, events: event[]): void {
     const currentElement = this.screens[this.currentBuildMode].peek();
-    const btn = new Button(this.generateID(), 0, 0, 0, 0, [], "");
+    const btn = new Button(this.generateID(), 0, 0, 0, 0, events, text, opts);
     btn.parent = currentElement!;
     currentElement!.addChildren(btn);
   }
 
-  public endMenu(): void {
-    this.screens[this.currentBuildMode].pop(); 
+  public backButton(opts: UIElementOpts): void {
+    const currentElement = this.screens[this.currentBuildMode].peek()!;
+    const btn = new Button(this.generateID(), 0, 0, 0, 0, [{ event: EventType.UI_UNTOGGLE, data: [] }], "Back", opts);
+    btn.parent = currentElement;
+    currentElement.addChildren(btn);
   }
 
-  // this is where all the position calculation goes
+  public beginPanel(opts: UIElementOpts, ...args: [number, number, number, number]) {
+    const currentElement = this.screens[this.currentBuildMode].peek()!;
+    const panel = new Panel(this.generateID(), ...args, opts);
+    console.log(currentElement);
+    panel.parent = currentElement;
+    currentElement.addChildren(panel);
+    this.screens[this.currentBuildMode].push(panel);
+  }
+
+  public endPanel() {
+    const panel: Panel = this.screens[this.currentBuildMode].peek()! as Panel;
+    if (panel.alignment == Alignment.Horizontal) {
+      this.alignHorizontally(panel);
+    } else {
+      this.alignVertically(panel);
+    }
+    this.screens[this.currentBuildMode].pop();
+  }
+
+  private alignHorizontally(panel: UIElement) {
+    const padding = 4;
+    const btnCount = panel.children.length;
+    const btnWidth = Math.floor((panel.width - (padding * (btnCount + 1))) / btnCount);
+    const btnHeight = Math.floor(panel.height * 0.8);
+
+    const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
+    const startX = panel.x + Math.floor((panel.width - totalButtonsWidth) / 2);
+    for (let i = 0; i < panel.children.length; i++) {
+      const btn = panel.children[i];
+      const btnX = startX + i * (btnWidth + padding);
+      const btnY = panel.y + Math.floor((panel.height - btnHeight) / 2);
+      btn.x = btnX;
+      btn.y = btnY;
+      btn.height = btnHeight;
+      btn.width = btnWidth;
+    }
+
+  }
+
+  private alignVertically(panel: UIElement) {
+    const padding = 4;
+    const btnCount = panel.children.length;
+    const btnWidth = Math.floor(panel.width * 0.8);
+    const btnHeight = Math.floor((panel.height - (padding * (btnCount + 1))) / btnCount);
+
+    const totalButtonsHeight = btnCount * btnHeight + (btnCount - 1) * padding;
+    const startY = panel.y + Math.floor((panel.height - totalButtonsHeight) / 2);
+
+    for (let i = 0; i < panel.children.length; i++) {
+      const btn = panel.children[i];
+      const btnX = panel.x + Math.floor((panel.width - btnWidth) / 2);
+      const btnY = startY + i * (btnHeight + padding);
+
+      btn.x = btnX;
+      btn.y = btnY;
+      btn.width = btnWidth;
+      btn.height = btnHeight;
+    }
+  }
+
   public End(): void {
-    console.log(this.screens[this.currentBuildMode]);
+    const root = this.screens[this.currentBuildMode].peek()!;
   }
 
   public setMode(mode: UIMode) {
@@ -854,14 +993,17 @@ class UI {
 
   // i like this function
   // ram will be eaten up so much if the UI is anymore complex though
-  private buttonClicked(element: UIElement, mouse: { x: number; y: number }): Button | null {
+  private buttonClicked(element: UIElement, mouse: { x: number; y: number }): Button | Menu | null {
     if (!element.contains(mouse.x, mouse.y) || !element.visible) return null;
+
+    if (element instanceof Menu) return element;
 
     if (element instanceof Button) return element;
 
     if (element instanceof Panel) {
       for (const child of element.children) {
         const btn = this.buttonClicked(child, mouse);
+
         if (btn) return btn;
       }
     }
@@ -886,12 +1028,6 @@ class UI {
 
 }
 
-
-type UIElementOpts = {
-  borderWidth: number;
-  borderColor: string;
-  backgroundColor: string;
-}
 
 class UIElement {
   id: number | string;
@@ -920,7 +1056,7 @@ class UIElement {
     this.height = height;
     this.parent = null;
     this.children = [];
-    this.borderWidth = BorderWidth.Med;
+    this.borderWidth = 0;
     this.borderColor = "rgba(0, 0, 0, 0)";
     this.backgroundColor = "rgba(0, 0, 0, 0)";
     this.visible = true;
@@ -956,21 +1092,27 @@ class UIElement {
         child.toggle();
         break;
       }
-
       child.toggleChild(id);
     }
   }
 }
 
 class Panel extends UIElement {
+  alignment: Alignment;
+
   constructor(
     id: number,
     x: number,
     y: number,
     width: number,
     height: number,
+    opts: UIElementOpts,
   ) {
     super(id, x, y, width, height);
+    this.borderColor = opts.borderColor;
+    this.borderWidth = opts.borderWidth;
+    this.backgroundColor = opts.backgroundColor;
+    this.alignment = opts.alignment;
   }
 
   addChild(...child: UIElement[]): void {
@@ -983,8 +1125,9 @@ class Panel extends UIElement {
 }
 
 class Menu extends UIElement {
-  text: string; 
-  
+  text: string;
+  toggleEvent: event;
+
   constructor(
     id: number | string,
     x: number,
@@ -999,6 +1142,7 @@ class Menu extends UIElement {
     this.borderColor = opts.borderColor;
     this.backgroundColor = opts.backgroundColor;
     this.borderWidth = opts.borderWidth;
+    this.toggleEvent = { event: EventType.UI_TOGGLE, data: this.children };
   }
 }
 
@@ -1014,11 +1158,15 @@ class Button extends UIElement {
     width: number,
     height: number,
     events: event[],
-    text: string
+    text: string,
+    opts: UIElementOpts
   ) {
     super(id, x, y, width, height);
     this.events = events;
     this.text = text;
+    this.borderColor = opts.borderColor;
+    this.borderWidth = opts.borderWidth;
+    this.backgroundColor = opts.backgroundColor;
   }
 
   eventList(): event[] {
