@@ -9,7 +9,8 @@ enum EventType {
   UI_TOGGLE,
   UI_UNTOGGLE,
   UNUSED,
-  CHOOSE_ACTIVE_CHARACTER
+  CHOOSE_ACTIVE_CHARACTER, // cuurrently not used
+  ATTACK
 }
 
 enum UIState {
@@ -131,7 +132,6 @@ class Game {
         break;
       case EventType.UI_TOGGLE:
         this.ui.curMode.push(event.data[0]);
-        console.log("Pushing", event.data);
         console.log(this.ui.curMode.stack);
         break;
       case EventType.UI_UNTOGGLE:
@@ -370,7 +370,7 @@ class DisplayDriver {
     // this.drawDebug();
     this.drawStage();
     this.drawCharacters();
-    this.drawUI(uiState);
+    this.drawUI(this.ui.curMode.peek()!);
   }
 
   private drawDebug() {
@@ -470,37 +470,80 @@ class DisplayDriver {
     //
   }
 
-  private drawUI(uiState: UIMode) {
-    const curScreen = this.ui.curMode.peek()!;
-    curScreen.children.forEach((element) => {
-      if (!element.visible) return
-      this.drawPanel(element as Panel);
+  private drawUI(curScreen: UIElement) {
+    this.drawPanel(curScreen as Panel);
+    curScreen.children.forEach((child) => {
+      if (!child.visible) return
+      if (child instanceof Menu || child instanceof Button) {
+        this.drawButton(child as Button);
+      } else if (child instanceof Panel) {
+        this.drawUI(child as Panel);
+      }
     });
   }
 
-  private drawButton(btn: Button) {
-    if (!btn.visible) return
+private drawButton(btn: Button) {
+    if (!btn.visible) return;
+
+    // Draw button background
     this.ctx.fillStyle = btn.backgroundColor;
     this.ctx.fillRect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
 
+    // Draw border
     this.ctx.strokeStyle = btn.borderColor;
     this.ctx.lineWidth = btn.borderWidth;
     this.ctx.beginPath();
     this.ctx.rect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
     this.ctx.stroke();
 
+    // Text properties
     this.ctx.fillStyle = "black";
-    const fontSize = Math.round(btn.width * this.scale * 0.08);
-    this.ctx.font = `${fontSize}px "Press Start 2P"`;
-
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
 
-    const textX = Math.floor(btn.x + btn.width / 2) * this.scale;
-    const textY = Math.floor(btn.y + btn.height / 2) * this.scale;
+    const maxWidth = btn.width * this.scale * 0.9; // Allow 90% of button width
+    const maxHeight = btn.height * this.scale * 0.7; // Allow 70% of button height
+    let fontSize = Math.round(btn.height * this.scale * 0.5); // Start based on height
 
-    this.ctx.fillText(btn.text, this.cX(textX), this.cY(textY));
-  }
+    this.ctx.font = `${fontSize}px "Press Start 2P"`;
+
+    // Reduce font size only if necessary
+    while (this.ctx.measureText(btn.text).width > maxWidth && fontSize > 10) {
+        fontSize -= 1;
+        this.ctx.font = `${fontSize}px "Press Start 2P"`;
+    }
+
+    // Word wrapping logic (only if text is still too wide)
+    const words = btn.text.split(" ");
+    let lines: string[] = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+        let testLine = currentLine + " " + words[i];
+        if (this.ctx.measureText(testLine).width > maxWidth) {
+            lines.push(currentLine);
+            currentLine = words[i];
+        } else {
+            currentLine = testLine;
+        }
+    }
+    lines.push(currentLine);
+
+    // Adjust font size further if text exceeds button height
+    while (lines.length * fontSize * 1.2 > maxHeight && fontSize > 10) {
+        fontSize -= 1;
+        this.ctx.font = `${fontSize}px "Press Start 2P"`;
+    }
+
+    // Center text properly
+    const textX = Math.floor(btn.x + btn.width / 2) * this.scale;
+    const textY = Math.floor(btn.y + btn.height / 2) * this.scale - ((lines.length - 1) * fontSize * 0.6) / 2;
+
+    // Draw lines with adjusted positioning
+    lines.forEach((line, i) => {
+        this.ctx.fillText(line, this.cX(textX), this.cY(textY + i * fontSize * 1.2));
+    });
+}
 
   private drawPanel(pnl: Panel) {
     if (!pnl.visible) return
@@ -518,8 +561,9 @@ class DisplayDriver {
     pnl.children.forEach((child) => {
       if (child instanceof Menu || child instanceof Button) {
         this.drawButton(child as Button);
+      } else if (child instanceof Panel) {
+        this.drawUI(child as Panel);
       }
-
     });
   }
 }
@@ -798,6 +842,8 @@ function constructScreen(ui: UI): void {
   let x = Math.floor((BASE_WIDTH / 2) - (pnlWidth / 2));
   let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
 
+  const team = ui.eventBus.bus.gameState.team;
+
   ui.Begin(UIMode.InGame);
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
 
@@ -805,16 +851,32 @@ function constructScreen(ui: UI): void {
 
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
   ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-  ui.button(defaultButtonOpts, "Target Knight", []);
+  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.Knight.id})]);
+  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.BlueWitch.id})]);
+  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.Necromancer.id})]);
   ui.endPanel();
 
   ui.endMenu();
 
   ui.beginMenu("witchButton", "Witch", defaultButtonOpts);
+  
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.Knight.id})]);
+  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.BlueWitch.id})]);
+  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.Necromancer.id})]);
+  ui.endPanel();
 
   ui.endMenu();
 
   ui.beginMenu("necromancerButton", "Necromancer", defaultButtonOpts);
+  
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.Knight.id})]);
+  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.BlueWitch.id})]);
+  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.Necromancer.id})]);
+  ui.endPanel();
 
   ui.endMenu();
 
@@ -844,8 +906,8 @@ class RenderStack {
 }
 
 class UI {
-  private eventBus: EventBus;
   private generateID: () => number;
+  public eventBus: EventBus;
 
   public curMode: RenderStack;
   public screens: { [key in UIMode]: RenderStack }
@@ -919,7 +981,6 @@ class UI {
   public beginPanel(opts: UIElementOpts, ...args: [number, number, number, number]) {
     const currentElement = this.screens[this.currentBuildMode].peek()!;
     const panel = new Panel(this.generateID(), ...args, opts);
-    console.log(currentElement);
     panel.parent = currentElement;
     currentElement.addChildren(panel);
     this.screens[this.currentBuildMode].push(panel);
