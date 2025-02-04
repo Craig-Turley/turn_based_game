@@ -107,8 +107,8 @@ class Game {
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
-    this.ui = new UI(this.eventBus, 320, 180);
-    this.gameState = new GameState(320, 180);
+    this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT);
+    this.ui = new UI(this.eventBus, BASE_WIDTH, BASE_HEIGHT);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
     this.uiState = UIMode.TitleScreen;
 
@@ -131,13 +131,17 @@ class Game {
         this.ui.setMode(this.uiState);
         break;
       case EventType.UI_TOGGLE:
-        this.ui.curMode.push(event.data[0]);
+        this.ui.curMode.push(event.data);
+        console.log(event.data);
         console.log(this.ui.curMode.stack);
         break;
       case EventType.UI_UNTOGGLE:
         this.ui.curMode.pop();
         break;
       case EventType.CHOOSE_ACTIVE_CHARACTER:
+        console.log(event);
+        break;
+      case EventType.ATTACK:
         console.log(event);
         break;
     }
@@ -476,27 +480,26 @@ class DisplayDriver {
       if (!child.visible) return
       if (child instanceof Menu || child instanceof Button) {
         this.drawButton(child as Button);
+      } else if (child instanceof Modal) {
+        this.drawModal(child as Modal)
       } else if (child instanceof Panel) {
         this.drawUI(child as Panel);
       }
     });
   }
 
-private drawButton(btn: Button) {
+  private drawButton(btn: Button) {
     if (!btn.visible) return;
 
-    // Draw button background
     this.ctx.fillStyle = btn.backgroundColor;
     this.ctx.fillRect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
 
-    // Draw border
     this.ctx.strokeStyle = btn.borderColor;
     this.ctx.lineWidth = btn.borderWidth;
     this.ctx.beginPath();
     this.ctx.rect(this.cX(btn.x * this.scale), this.cY(btn.y * this.scale), btn.width * this.scale, btn.height * this.scale);
     this.ctx.stroke();
 
-    // Text properties
     this.ctx.fillStyle = "black";
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
@@ -507,43 +510,91 @@ private drawButton(btn: Button) {
 
     this.ctx.font = `${fontSize}px "Press Start 2P"`;
 
-    // Reduce font size only if necessary
     while (this.ctx.measureText(btn.text).width > maxWidth && fontSize > 10) {
-        fontSize -= 1;
-        this.ctx.font = `${fontSize}px "Press Start 2P"`;
+      fontSize -= 1;
+      this.ctx.font = `${fontSize}px "Press Start 2P"`;
     }
 
-    // Word wrapping logic (only if text is still too wide)
     const words = btn.text.split(" ");
     let lines: string[] = [];
     let currentLine = words[0];
 
     for (let i = 1; i < words.length; i++) {
-        let testLine = currentLine + " " + words[i];
-        if (this.ctx.measureText(testLine).width > maxWidth) {
-            lines.push(currentLine);
-            currentLine = words[i];
-        } else {
-            currentLine = testLine;
-        }
+      let testLine = currentLine + " " + words[i];
+      if (this.ctx.measureText(testLine).width > maxWidth) {
+        lines.push(currentLine);
+        currentLine = words[i];
+      } else {
+        currentLine = testLine;
+      }
     }
     lines.push(currentLine);
 
-    // Adjust font size further if text exceeds button height
     while (lines.length * fontSize * 1.2 > maxHeight && fontSize > 10) {
-        fontSize -= 1;
-        this.ctx.font = `${fontSize}px "Press Start 2P"`;
+      fontSize -= 1;
+      this.ctx.font = `${fontSize}px "Press Start 2P"`;
     }
 
-    // Center text properly
     const textX = Math.floor(btn.x + btn.width / 2) * this.scale;
     const textY = Math.floor(btn.y + btn.height / 2) * this.scale - ((lines.length - 1) * fontSize * 0.6) / 2;
 
-    // Draw lines with adjusted positioning
     lines.forEach((line, i) => {
-        this.ctx.fillText(line, this.cX(textX), this.cY(textY + i * fontSize * 1.2));
+      this.ctx.fillText(line, this.cX(textX), this.cY(textY + i * fontSize * 1.2));
     });
-}
+  }
+
+  private drawModal(modal: Modal) {
+    this.ctx.fillStyle = modal.backgroundColor;
+    this.ctx.fillRect(this.cX(modal.x * this.scale), this.cY(modal.y * this.scale), modal.width * this.scale, modal.height * this.scale);
+
+    this.ctx.strokeStyle = modal.borderColor;
+    this.ctx.lineWidth = modal.borderWidth;
+    this.ctx.beginPath();
+    this.ctx.rect(this.cX(modal.x * this.scale), this.cY(modal.y * this.scale), modal.width * this.scale, modal.height * this.scale);
+    this.ctx.stroke();
+
+    this.ctx.fillStyle = modal.textColor;
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
+
+    const maxWidth = modal.width * this.scale * 0.9; // Allow 90% of button width
+    const maxHeight = modal.height * this.scale * 0.7; // Allow 70% of button height
+    let fontSize = Math.round(modal.height * this.scale * 0.5); // Start based on height
+
+    this.ctx.font = `${fontSize}px "Press Start 2P"`;
+
+    while (this.ctx.measureText(modal.text).width > maxWidth && fontSize > 10) {
+      fontSize -= 1;
+      this.ctx.font = `${fontSize}px "Press Start 2P"`;
+    }
+
+    const words = modal.text.split(" ");
+    let lines: string[] = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+      let testLine = currentLine + " " + words[i];
+      if (this.ctx.measureText(testLine).width > maxWidth) {
+        lines.push(currentLine);
+        currentLine = words[i];
+      } else {
+        currentLine = testLine;
+      }
+    }
+    lines.push(currentLine);
+
+    while (lines.length * fontSize * 1.2 > maxHeight && fontSize > 10) {
+      fontSize -= 1;
+      this.ctx.font = `${fontSize}px "Press Start 2P"`;
+    }
+
+    const textX = Math.floor(modal.x + modal.width / 2) * this.scale;
+    const textY = Math.floor(modal.y + modal.height / 2) * this.scale - ((lines.length - 1) * fontSize * 0.6) / 2;
+
+    lines.forEach((line, i) => {
+      this.ctx.fillText(line, this.cX(textX), this.cY(textY + i * fontSize * 1.2));
+    });
+  }
 
   private drawPanel(pnl: Panel) {
     if (!pnl.visible) return
@@ -765,7 +816,8 @@ function initIdGenerator(): () => number {
 
 enum BackgroundColor {
   IvoryWhite = "#FFFFF0",
-  LightGrey = "#D3D3D3"
+  LightGrey = "#D3D3D3",
+  Black = "#000000",
 }
 
 enum BorderWidth {
@@ -773,7 +825,8 @@ enum BorderWidth {
 }
 
 enum BorderColor {
-  Black = "black"
+  Black = "black",
+  IvoryWhite = "#FFFFF0",
 }
 
 type UIElementOpts = {
@@ -782,6 +835,7 @@ type UIElementOpts = {
   backgroundColor: string;
   padding: number;
   alignment: Alignment;
+  textColor: string;
 }
 
 enum Alignment {
@@ -795,6 +849,7 @@ const defaultOpts = {
   backgroundColor: "rgba(0,0,0,0)",
   padding: 0,
   alignment: Alignment.Vertical,
+  textColor: "rgba(0,0,0,0)"
 }
 
 const defaultButtonOpts = {
@@ -802,7 +857,8 @@ const defaultButtonOpts = {
   borderColor: BorderColor.Black,
   backgroundColor: BackgroundColor.IvoryWhite,
   padding: 0,
-  alignment: Alignment.Vertical
+  alignment: Alignment.Vertical,
+  textColor: "rgba(0,0,0,0)"
 }
 
 const defaultPanelOpts = {
@@ -836,53 +892,120 @@ function constructScreen(ui: UI): void {
   ui.endPanel();
   ui.End();
 
-  // end title screen
   pnlWidth = BASE_WIDTH * 0.7;
   pnlHeight = Characters.StageFloor.size.y;
-  let x = Math.floor((BASE_WIDTH / 2) - (pnlWidth / 2));
+  let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
   let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
+  // let sidePnlWidth = BASE_WIDTH * 0.2;
+  // let sidePnlHeight = Characters.StageFloor.size.y;
+  // let sidex = BASE_HEIGHT * 0.05;
+  // let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
 
-  const team = ui.eventBus.bus.gameState.team;
-
+  const team = [...ui.eventBus.bus.gameState.team].reverse();
   ui.Begin(UIMode.InGame);
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
 
-  ui.beginMenu("knightButton", "Knight", defaultButtonOpts);
+  team.forEach((character) => {
+    ui.beginMenu(`${character.name}Button`, `${character.name}`, defaultButtonOpts);
+    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
 
-  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
-  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.Knight.id})]);
-  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.BlueWitch.id})]);
-  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.Knight.id, attack: "", target: Characters.Necromancer.id})]);
-  ui.endPanel();
+    ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+    character.attack.forEach((attack) => {
+      ui.beginMenu(`${character.name}${attack.name}Button`, `${attack.name}`, defaultButtonOpts);
+      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+      ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+      ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id })]);
+      ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.BlueWitch.id })]);
+      ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Necromancer.id })]);
+      ui.endPanel();
+      ui.endMenu();
+    });
 
-  ui.endMenu();
+    ui.endPanel();
+    ui.endMenu();
+  });
 
-  ui.beginMenu("witchButton", "Witch", defaultButtonOpts);
-  
-  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
-  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.Knight.id})]);
-  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.BlueWitch.id})]);
-  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.BlueWitch.id, attack: "", target: Characters.Necromancer.id})]);
-  ui.endPanel();
-
-  ui.endMenu();
-
-  ui.beginMenu("necromancerButton", "Necromancer", defaultButtonOpts);
-  
-  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
-  ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-  ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.Knight.id})]);
-  ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.BlueWitch.id})]);
-  ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, {character: Characters.Necromancer.id, attack: "", target: Characters.Necromancer.id})]);
-  ui.endPanel();
-
-  ui.endMenu();
 
   ui.endPanel();
   ui.End();
 
+  // end title screen
+  // let sidePnlWidth = BASE_WIDTH * 0.2;
+  // let sidePnlHeight = Characters.StageFloor.size.y;
+  // let sidex = BASE_HEIGHT * 0.05;
+  // let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
+  //
+  // const team = [...ui.eventBus.bus.gameState.team].reverse();
+  //
+  // ui.Begin(UIMode.InGame);
+  //
+  // ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, sidex, sidey, sidePnlWidth, sidePnlHeight);
+  // ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
+  // ui.endPanel();
+  //
+  // pnlWidth = BASE_WIDTH * 0.7;
+  // pnlHeight = Characters.StageFloor.size.y;
+  // let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
+  // let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
+  //
+  // ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  //
+  // team.forEach((character) => {
+  //   ui.beginMenu(`${character.name}Button`, `${character.name}`, defaultButtonOpts);
+  //   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  //
+  //   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, sidex, sidey, sidePnlWidth, sidePnlHeight);
+  //   ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
+  //   ui.endPanel();
+  //
+  //   ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  //   character.attack.forEach((attack) => {
+  //     ui.beginMenu(`${character.name}${attack.name}Button`, `${attack.name}`, defaultButtonOpts);
+  //     ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  //     ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  //     ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id })]);
+  //     ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.BlueWitch.id })]);
+  //     ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Necromancer.id })]);
+  //     ui.endPanel();
+  //     ui.endMenu();
+  //   });
+  //
+  //   ui.endPanel();
+  //   ui.endMenu();
+  // });
+
+  // ui.beginMenu("knightButton", "Knight", defaultButtonOpts);
+  //
+  // ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  // ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  // ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: "", target: Characters.Knight.id })]);
+  // ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: "", target: Characters.BlueWitch.id })]);
+  // ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, { character: Characters.Knight.id, attack: "", target: Characters.Necromancer.id })]);
+  // ui.endPanel();
+  //
+  // ui.endMenu();
+  //
+  // ui.beginMenu("witchButton", "Witch", defaultButtonOpts);
+  //
+  // ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  // ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  // ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, { character: Characters.BlueWitch.id, attack: "", target: Characters.Knight.id })]);
+  // ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, { character: Characters.BlueWitch.id, attack: "", target: Characters.BlueWitch.id })]);
+  // ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, { character: Characters.BlueWitch.id, attack: "", target: Characters.Necromancer.id })]);
+  // ui.endPanel();
+  //
+  // ui.endMenu();
+  //
+  // ui.beginMenu("necromancerButton", "Necromancer", defaultButtonOpts);
+  //
+  // ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+  // ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
+  // ui.button(defaultButtonOpts, "Target Knight", [ConstructEvent(EventType.ATTACK, { character: Characters.Necromancer.id, attack: "", target: Characters.Knight.id })]);
+  // ui.button(defaultButtonOpts, "Target Witch", [ConstructEvent(EventType.ATTACK, { character: Characters.Necromancer.id, attack: "", target: Characters.BlueWitch.id })]);
+  // ui.button(defaultButtonOpts, "Target Necromancer", [ConstructEvent(EventType.ATTACK, { character: Characters.Necromancer.id, attack: "", target: Characters.Necromancer.id })]);
+  // ui.endPanel();
+  //
+  // ui.endMenu();
 }
 
 class RenderStack {
@@ -978,6 +1101,13 @@ class UI {
     currentElement.addChildren(btn);
   }
 
+  public modal(opts: UIElementOpts, text: string): void {
+    const currentElement = this.screens[this.currentBuildMode].peek();
+    const modal = new Modal(this.generateID(), 0, 0, 0, 0, text, opts);
+    modal.parent = currentElement!;
+    currentElement!.addChildren(modal);
+  }
+
   public beginPanel(opts: UIElementOpts, ...args: [number, number, number, number]) {
     const currentElement = this.screens[this.currentBuildMode].peek()!;
     const panel = new Panel(this.generateID(), ...args, opts);
@@ -1039,6 +1169,7 @@ class UI {
 
   public End(): void {
     const root = this.screens[this.currentBuildMode].peek()!;
+    console.log("Root", root);
   }
 
   public setMode(mode: UIMode) {
@@ -1203,7 +1334,7 @@ class Menu extends UIElement {
     this.borderColor = opts.borderColor;
     this.backgroundColor = opts.backgroundColor;
     this.borderWidth = opts.borderWidth;
-    this.toggleEvent = { event: EventType.UI_TOGGLE, data: this.children };
+    this.toggleEvent = { event: EventType.UI_TOGGLE, data: this };
   }
 }
 
@@ -1241,6 +1372,7 @@ class Button extends UIElement {
 
 class Modal extends UIElement {
   text: string;
+  textColor: string;
 
   constructor(
     id: number,
@@ -1248,11 +1380,12 @@ class Modal extends UIElement {
     y: number,
     width: number,
     height: number,
-    parent: UIElement | null,
-    text: string
+    text: string,
+    opts: UIElementOpts,
   ) {
     super(id, x, y, width, height);
     this.text = text;
+    this.textColor = opts.textColor;
   }
 
 }
