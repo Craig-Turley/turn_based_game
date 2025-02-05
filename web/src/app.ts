@@ -131,6 +131,8 @@ class Game {
         this.ui.setMode(this.uiState);
         (async () => {
           const roomCode = await this.commsDriver.createRoom();
+          const modal = this.ui.curMode.peek()!.findById("gameId") as Modal;
+          modal.setText(`Room Number: ${roomCode}`);
           // set the modal here. need to add setting to UI
         })();
 
@@ -756,11 +758,11 @@ function constructWaitingScreen(ui: UI): void {
 
   ui.Begin(UIMode.Waiting);
   ui.beginPanel(defaultPanelOpts, null, pnlX, pnlY, pnlWidth, pnlHeight);
-  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "Waiting for player to Join", "gameId");
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "Waiting for player to Join");
   ui.endPanel();
 
   ui.beginPanel(defaultOpts, null, modalX, modalY, modalWidth, modalHeight);
-  ui.modal({ ...defaultOpts, textColor: BackgroundColor.IvoryWhite, backgroundColor: BackgroundColor.DarkTransparentGrey }, "Fetching Room Number...");
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.IvoryWhite, backgroundColor: BackgroundColor.DarkTransparentGrey }, "Fetching Room Number...", "gameId");
   ui.endPanel();
   ui.End();
 }
@@ -1085,6 +1087,21 @@ class UIElement {
     this.children.push(...children);
   }
 
+  findById(id: string | number): UIElement | null {
+    if (this.id === id) return this;
+
+    for (const child of this.children) {
+      if (child.id === id) return child;
+    }
+
+    for (const child of this.children) {
+      const element = child.findById(id);
+      if (element != null) return element;
+    }
+
+    return null;
+  }
+
   // this has potential to mess up some state
   // ex 
   // parentpanel -> btn, btn, childpanel -> btn, btn
@@ -1204,6 +1221,10 @@ class Modal extends UIElement {
     super(id, x, y, width, height);
     this.text = text;
     this.textColor = opts.textColor;
+  }
+
+  setText(text: string) {
+    this.text = text;
   }
 
 }
