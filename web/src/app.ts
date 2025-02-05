@@ -99,12 +99,14 @@ class Game {
   private eventBus: EventBus;
   private ui: UI;
   private uiState: UIMode;
+  public commsDriver: CommunicationProtocolDriver;
   public gameState: GameState;
   public displayDriver: DisplayDriver;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
+    this.commsDriver = new CommunicationProtocolDriver()
     this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT);
     this.ui = new UI(this.eventBus, BASE_WIDTH, BASE_HEIGHT);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
@@ -125,8 +127,13 @@ class Game {
   update(event: event): void {
     switch (event.event) {
       case EventType.CREATE_ROOM:
-        this.uiState = UIMode.InGame;
+        this.uiState = UIMode.Waiting;
         this.ui.setMode(this.uiState);
+        (async () => {
+          const roomCode = await this.commsDriver.createRoom();
+          // set the modal here. need to add setting to UI
+        })();
+
         break;
       case EventType.UI_TOGGLE:
         this.ui.curMode.push(event.data);
@@ -146,6 +153,18 @@ class Game {
       case EventType.INCOMINGATTACK:
         this.gameState.handleAttack(event.data);
     }
+  }
+}
+
+class CommunicationProtocolDriver {
+  constructor() { }
+
+  createRoom(): Promise<string> {
+    return new Promise((res, rej) => {
+      setTimeout(() => {
+        res("12345678");
+      }, 1000);
+    });
   }
 }
 
@@ -505,9 +524,9 @@ class DisplayDriver {
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
 
-    const maxWidth = btn.width * this.scale * 0.9; 
-    const maxHeight = btn.height * this.scale * 0.7; 
-    let fontSize = Math.round(btn.width * this.scale * 0.5); 
+    const maxWidth = btn.width * this.scale * 0.9;
+    const maxHeight = btn.height * this.scale * 0.7;
+    let fontSize = Math.round(btn.width * this.scale * 0.5);
 
     this.ctx.font = `${fontSize}px "Press Start 2P"`;
 
@@ -632,166 +651,12 @@ class EventBus {
   }
 }
 
-// function constructTitleScreen(baseWidth: number, baseHeight: number, generateID: () => number): UIElement {
-//   const pnlHeight = Math.floor(baseHeight * 0.4);
-//   const pnlWidth = Math.floor(pnlHeight * 0.5);
-//   const x = Math.floor(
-//     (baseWidth * 0.5) - (pnlWidth * 0.5)
-//   );
-//   const y = Math.floor(
-//     (baseHeight * 0.5) - (pnlHeight * 0.5)
-//   );
-//
-//   const mainPanel = new Panel(
-//     generateID(),
-//     x,
-//     y,
-//     pnlWidth,
-//     pnlHeight,
-//     defaultOpts
-//   );
-//
-//   const mainScreenButtons = [
-//     {
-//       events: [{ event: EventType.CREATE_ROOM, data: null }],
-//       text: "Create Room",
-//     },
-//     {
-//       events: [{ event: EventType.CHANGE_TEAM, data: null }],
-//       text: "Join Room",
-//     },
-//     {
-//       events: [{ event: EventType.CHANGE_TEAM, data: null }],
-//       text: "Change Team",
-//     },
-//     {
-//       events: [{ event: EventType.UNUSED, data: null }],
-//       text: "Unused",
-//     },
-//   ];
-//
-//   // some padding for the buttons
-//   const padding = 4;
-//   const btnHeight = (pnlHeight / mainScreenButtons.length) - padding;
-//   mainScreenButtons.forEach((btn, i) => {
-//     const btnY = (y + ((btnHeight + padding) * i));
-//     const childBtn = new Button(generateID(), x, btnY, pnlWidth, btnHeight, btn.events, btn.text);
-//     childBtn.parent = mainPanel;
-//     childBtn.backgroundColor = BackgroundColor.IvoryWhite;
-//     childBtn.borderColor = BorderColor.Black;
-//     childBtn.borderWidth = BorderWidth.Med;
-//     mainPanel.addChild(childBtn);
-//   });
-//
-//
-//   return mainPanel;
-// }
-
-// function evenlySpaceButtons(
-//   generateID: () => number,
-//   parentX: number,
-//   parentY: number,
-//   parentWidth: number,
-//   parentHeight: number,
-//   btnCount: number,
-//   padding: number
-// ): Button[] {
-//
-//   const btnWidth = Math.floor((parentWidth - (padding * (btnCount + 1))) / btnCount);
-//   const btnHeight = Math.floor(parentHeight * 0.8);
-//
-//   const totalButtonsWidth = btnCount * btnWidth + (btnCount - 1) * padding;
-//   const startX = parentX + Math.floor((parentWidth - totalButtonsWidth) / 2);
-//
-//   const btns: Button[] = [];
-//   for (let i = 0; i < btnCount; i++) {
-//     const btnX = startX + i * (btnWidth + padding); // Compute X position for the button
-//     const btnY = parentY + Math.floor((parentHeight - btnHeight) / 2); // Center Y position
-//
-//     const btn = new Button(
-//       generateID(),
-//       btnX,
-//       btnY,
-//       btnWidth,
-//       btnHeight,
-//       [],
-//       "",
-//     );
-//
-//     btns.push(btn);
-//   }
-//
-//   return btns;
-// }
-
 function setBackButton(btn: Button) {
   btn.backgroundColor = BackgroundColor.LightGrey;
   btn.borderColor = BorderColor.Black;
   btn.borderWidth = BorderWidth.Med;
   btn.text = "Back";
 }
-
-// function constructGameScreen(
-//   team: Character[],
-//   baseWidth: number,
-//   baseHeight: number,
-//   generateID: () => number
-// ): { screens: UIElement[], charactersid: number } {
-//   // x, y, width, height, parent, children
-//   let pnlWidth = baseWidth * 0.7;
-//   let pnlHeight = Characters.StageFloor.size.y;
-//   let x = Math.floor((baseWidth / 2) - (pnlWidth / 2));
-//   let y = Math.floor((baseHeight) - (pnlHeight - 3));
-//   const mainPanel = new Panel(
-//     generateID(),
-//     x,
-//     y,
-//     pnlWidth,
-//     pnlHeight,
-//   );
-//
-//   mainPanel.backgroundColor = BackgroundColor.IvoryWhite;
-//   mainPanel.borderColor = BorderColor.Black;
-//   mainPanel.borderWidth = BorderWidth.Med;
-//
-//   const characters = new Panel(
-//     generateID(),
-//     x,
-//     y,
-//     pnlWidth,
-//     pnlHeight,
-//   );
-//
-//   const characterBtns = evenlySpaceButtons(
-//     generateID,
-//     x,
-//     y,
-//     pnlWidth,
-//     pnlHeight,
-//     3,
-//     4
-//   );
-//
-//   for (let i = 0; i < characterBtns.length; i++) {
-//     const btn = characterBtns[i];
-//     btn.text = `${team[i].name}`;
-//     btn.backgroundColor = BackgroundColor.IvoryWhite;
-//     btn.borderWidth = BorderWidth.Med;
-//     btn.borderColor = BorderColor.Black;
-//     btn.addEvents({
-//       event: EventType.CHOOSE_ACTIVE_CHARACTER,
-//       data: team[i]
-//     });
-//   }
-//
-//   characters.addChild(...characterBtns);
-//   mainPanel.addChild(characters);
-//
-//   return {
-//     screens: [mainPanel],
-//     charactersid: characters.id,
-//   };
-// }
 
 enum UIMode {
   TitleScreen,
@@ -808,18 +673,12 @@ function initIdGenerator(): () => number {
   }
 }
 
-
-// type UIElementOpts = {
-//   borderWidth: number;
-//   borderColor: string;
-//   backgroundColor: string;
-// }
-
 enum BackgroundColor {
   IvoryWhite = "#FFFFF0",
   LightGrey = "#D3D3D3",
   Black = "#000000",
   LightRed = "#FF7F7F",
+  DarkTransparentGrey = "rgba(50, 50, 50, 1)",
 }
 
 enum BorderWidth {
@@ -870,7 +729,7 @@ const defaultPanelOpts = {
   borderWidth: BorderWidth.Med
 };
 
-function constructScreen(ui: UI): void {
+function constructMainScreen(ui: UI): void {
   const aspectRatio = 1.5;
   let pnlHeight = Math.floor(BASE_HEIGHT * 0.5);
   let pnlWidth = Math.floor(pnlHeight / aspectRatio);
@@ -882,9 +741,33 @@ function constructScreen(ui: UI): void {
   ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
   ui.endPanel();
   ui.End();
+}
 
-  pnlWidth = BASE_WIDTH * 0.7;
-  pnlHeight = Characters.StageFloor.size.y;
+function constructWaitingScreen(ui: UI): void {
+  const pnlWidth = BASE_WIDTH * 0.6;
+  const pnlHeight = Characters.StageFloor.size.y;
+  const pnlX = Math.floor((BASE_WIDTH / 2) - (pnlWidth / 2));
+  const pnlY = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
+
+  const modalWidth = BASE_WIDTH * 0.5;
+  const modalHeight = modalWidth;
+  const modalX = Math.floor((BASE_WIDTH / 2) - (modalWidth / 2));
+  const modalY = Math.floor((BASE_HEIGHT / 2) - (modalHeight / 2));
+
+  ui.Begin(UIMode.Waiting);
+  ui.beginPanel(defaultPanelOpts, null, pnlX, pnlY, pnlWidth, pnlHeight);
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "Waiting for player to Join", "gameId");
+  ui.endPanel();
+
+  ui.beginPanel(defaultOpts, null, modalX, modalY, modalWidth, modalHeight);
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.IvoryWhite, backgroundColor: BackgroundColor.DarkTransparentGrey }, "Fetching Room Number...");
+  ui.endPanel();
+  ui.End();
+}
+
+function constructGameScreen(ui: UI): void {
+  let pnlWidth = BASE_WIDTH * 0.7;
+  let pnlHeight = Characters.StageFloor.size.y;
   let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
   let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
   let sidePnlWidth = BASE_WIDTH * 0.2;
@@ -894,7 +777,7 @@ function constructScreen(ui: UI): void {
 
   const team = [...ui.eventBus.bus.gameState.team].reverse();
   ui.Begin(UIMode.InGame, "characterScreen");
- 
+
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
   ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
   ui.endPanel();
@@ -907,22 +790,22 @@ function constructScreen(ui: UI): void {
     ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
     ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose an attack");
     ui.endPanel();
-    
-    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med },null, x, y, pnlWidth, pnlHeight);
+
+    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, null, x, y, pnlWidth, pnlHeight);
 
     ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
     character.attack.forEach((attack) => {
       ui.beginMenu(`${character.name}${attack.name}Button`, `${attack.name}`, defaultButtonOpts);
-    
-      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null,sidex, sidey, sidePnlWidth, sidePnlHeight);
+
+      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
       ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a target");
       ui.endPanel();
-     
-      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med },null, x, y, pnlWidth, pnlHeight);
+
+      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, null, x, y, pnlWidth, pnlHeight);
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
       ui.endPanel();
       ui.endMenu();
     });
@@ -931,10 +814,8 @@ function constructScreen(ui: UI): void {
     ui.endMenu();
   });
 
-
   ui.endPanel();
   ui.End();
-
 }
 
 class RenderStack {
@@ -987,7 +868,9 @@ class UI {
     };
     this.curMode = this.screens[UIMode.TitleScreen];
     this.currentBuildMode = UIMode.TitleScreen;
-    constructScreen(this);
+    constructMainScreen(this);
+    constructWaitingScreen(this);
+    constructGameScreen(this);
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
       for (const element of this.curMode.peek()!.children) {
@@ -1041,16 +924,16 @@ class UI {
     currentElement.addChildren(btn);
   }
 
-  public modal(opts: UIElementOpts, text: string): void {
+  public modal(opts: UIElementOpts, text: string, id: string | null = null): void {
     const currentElement = this.screens[this.currentBuildMode].peek();
-    const modal = new Modal(this.generateID(), 0, 0, 0, 0, text, opts);
+    const modal = new Modal(id ?? this.generateID(), 0, 0, 0, 0, text, opts);
     modal.parent = currentElement!;
     currentElement!.addChildren(modal);
   }
 
   public beginPanel(opts: UIElementOpts, id: string | null, ...args: [number, number, number, number]) {
     const currentElement = this.screens[this.currentBuildMode].peek()!;
-  const panelID = id ?? this.generateID();
+    const panelID = id ?? this.generateID();
     const panel = new Panel(panelID, ...args, opts);
     panel.parent = currentElement;
     currentElement.addChildren(panel);
@@ -1112,14 +995,7 @@ class UI {
   }
 
   public setMode(mode: UIMode) {
-    switch (mode) {
-      case (UIMode.TitleScreen):
-        this.curMode = this.screens[UIMode.TitleScreen];
-        break;
-      case (UIMode.InGame):
-        this.curMode = this.screens[UIMode.InGame];
-        break;
-    }
+    this.curMode = this.screens[mode];
   }
 
   // i like this function
@@ -1140,6 +1016,9 @@ class UI {
     }
 
     return null;
+  }
+
+  public setText(text: string): void {
   }
 
   // so readable
@@ -1314,7 +1193,7 @@ class Modal extends UIElement {
   textColor: string;
 
   constructor(
-    id: number,
+    id: string | number,
     x: number,
     y: number,
     width: number,
