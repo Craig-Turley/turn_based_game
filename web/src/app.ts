@@ -130,10 +130,12 @@ class Game {
         break;
       case EventType.UI_TOGGLE:
         this.ui.curMode.push(event.data);
-        this.ui.curMode.popBackTo(event.data);
         break;
       case EventType.UI_UNTOGGLE:
         this.ui.curMode.pop();
+        break;
+      case EventType.UI_UNTOGGLE_ID:
+        this.ui.curMode.popBackTo(event.data);
         break;
       case EventType.CHOOSE_ACTIVE_CHARACTER:
         console.log(event);
@@ -868,24 +870,13 @@ const defaultPanelOpts = {
   borderWidth: BorderWidth.Med
 };
 
-/*
-  ui.Begin();
-    // centered with aspectRatio of 1.5
-    ui.beginPanel();
-      ui.button();
-      ui.button();
-      ui.button();
-    ui.endPanel();
-  ui.End();
-* */
-
 function constructScreen(ui: UI): void {
   const aspectRatio = 1.5;
   let pnlHeight = Math.floor(BASE_HEIGHT * 0.5);
   let pnlWidth = Math.floor(pnlHeight / aspectRatio);
 
   ui.Begin(UIMode.TitleScreen);
-  ui.beginPanel(defaultOpts, ((BASE_WIDTH * 0.5) - (pnlWidth * 0.5)), ((BASE_HEIGHT * 0.5) - (pnlHeight * 0.5)), pnlWidth, pnlHeight);
+  ui.beginPanel(defaultOpts, null, ((BASE_WIDTH * 0.5) - (pnlWidth * 0.5)), ((BASE_HEIGHT * 0.5) - (pnlHeight * 0.5)), pnlWidth, pnlHeight);
   ui.button(defaultButtonOpts, "Make Room", [ConstructEvent(EventType.CREATE_ROOM, "")]);
   ui.button(defaultButtonOpts, "Join Room", [ConstructEvent(EventType.JOIN_ROOM, "")]);
   ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
@@ -902,37 +893,36 @@ function constructScreen(ui: UI): void {
   let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
 
   const team = [...ui.eventBus.bus.gameState.team].reverse();
-  ui.Begin(UIMode.InGame);
+  ui.Begin(UIMode.InGame, "characterScreen");
  
-  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, sidex, sidey, sidePnlWidth, sidePnlHeight);
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
   ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
   ui.endPanel();
 
-  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
-  
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, "characterScreen", x, y, pnlWidth, pnlHeight);
 
   team.forEach((character) => {
     ui.beginMenu(`${character.name}Button`, `${character.name}`, defaultButtonOpts);
 
-    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, sidex, sidey, sidePnlWidth, sidePnlHeight);
+    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
     ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose an attack");
     ui.endPanel();
     
-    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+    ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med },null, x, y, pnlWidth, pnlHeight);
 
     ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
     character.attack.forEach((attack) => {
       ui.beginMenu(`${character.name}${attack.name}Button`, `${attack.name}`, defaultButtonOpts);
     
-      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, sidex, sidey, sidePnlWidth, sidePnlHeight);
+      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null,sidex, sidey, sidePnlWidth, sidePnlHeight);
       ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a target");
       ui.endPanel();
      
-      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, x, y, pnlWidth, pnlHeight);
+      ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med },null, x, y, pnlWidth, pnlHeight);
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id })]);
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.BlueWitch.id })]);
-      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Necromancer.id })]);
+      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
       ui.endPanel();
       ui.endMenu();
     });
@@ -963,7 +953,12 @@ class RenderStack {
   }
 
   popBackTo(elementId: string) {
-    while (this.peek()!.id != elementId) {
+    while (this.stack.length > 0) {
+      const element = this.peek();
+      if (element?.id === elementId) {
+        break;
+      }
+
       this.pop();
     }
   }
@@ -1015,8 +1010,8 @@ class UI {
     });
   }
 
-  public Begin(mode: UIMode): void {
-    this.screens[mode].push(new Panel(this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT, defaultOpts));
+  public Begin(mode: UIMode, id: string | null = null): void {
+    this.screens[mode].push(new Panel(id ?? this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT, defaultOpts));
     this.currentBuildMode = mode;
   }
 
@@ -1053,9 +1048,10 @@ class UI {
     currentElement!.addChildren(modal);
   }
 
-  public beginPanel(opts: UIElementOpts, ...args: [number, number, number, number]) {
+  public beginPanel(opts: UIElementOpts, id: string | null, ...args: [number, number, number, number]) {
     const currentElement = this.screens[this.currentBuildMode].peek()!;
-    const panel = new Panel(this.generateID(), ...args, opts);
+  const panelID = id ?? this.generateID();
+    const panel = new Panel(panelID, ...args, opts);
     panel.parent = currentElement;
     currentElement.addChildren(panel);
     this.screens[this.currentBuildMode].push(panel);
@@ -1236,7 +1232,7 @@ class Panel extends UIElement {
   alignment: Alignment;
 
   constructor(
-    id: number,
+    id: string | number,
     x: number,
     y: number,
     width: number,
