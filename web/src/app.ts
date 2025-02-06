@@ -365,10 +365,13 @@ const Characters = {
     id: SpriteID.Underground,
   },
   Knight: {
-    image: "./assets/knight/color_1/outline/png_sheets/_idle.png",
-    start: new Vector(0, 0),
+    image: "./assets/knight/knight_sprite_sheet.png",
+    start: new Vector(0, 80),
     size: new Vector(120, 80),
     offset: new Vector(0, 0),
+    frames: {
+      idle: 10,
+    },
     moves: [
       { name: "Slash", damage: 10 },
       { name: "Defend", damage: 0 },
@@ -377,8 +380,8 @@ const Characters = {
     name: "Knight",
   },
   BlueWitch: {
-    image: "./assets/blue_witch/_idle.png",
-    start: new Vector(0, 0),
+    image: "./assets/blue_witch/blue_witch_sprite_sheet.png",
+    start: new Vector(32, 96),
     size: new Vector(32, 40),
     offset: new Vector(0, 0),
     moves: [
@@ -417,6 +420,11 @@ class Sprite {
     this.start = start;
     this.offset = offset;
     this.id = id;
+  }
+
+  animate() {
+    
+    requestAnimationFrame(this.animate);
   }
 }
 
