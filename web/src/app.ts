@@ -3,7 +3,11 @@ const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
 enum EventType {
   CREATE_ROOM,
+  ROOM_ID_RECIEVED,
+  SINGLE_PLAYER,
+  CONNECT,
   JOIN_ROOM,
+  START_GAME,
   PLAY,
   CHANGE_TEAM,
   UI_TOGGLE,
@@ -38,6 +42,12 @@ type Move = {
   damage: number, // positive or negative based on healing effects and stuff 
 }
 
+type Attack = {
+  character: SpriteID,
+  attack: Move,
+  target: SpriteID,
+}
+
 class Character {
   public sprite: Sprite;
   public position: Vector;
@@ -59,10 +69,31 @@ class Character {
 class GameState {
   roomKey: string | null;
   team: Character[];
+  enemyTeam: Character[];
+  attackQueue: Attack[];
 
   constructor(ctxWidth: number, ctxHeight: number) {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
+    this.enemyTeam = this.constructEnemyTeam(ctxWidth, ctxHeight);
+    this.attackQueue = [];
     this.roomKey = null;
+  }
+
+  queAttack(attack: Attack): Boolean {
+    const index = this.attackQueue.findIndex((qattack) => attack.character === qattack.character);
+
+    if (index !== -1) {
+      console.log(this.attackQueue[index], attack);
+      this.attackQueue.splice(index, 1);
+      console.log("Removed existing attack from queue.");
+    }
+
+    this.attackQueue.push(attack);
+    return this.attackQueue.length == this.team.length;
+  }
+
+  flushQueue(): void {
+    this.attackQueue = [];
   }
 
   constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
@@ -84,9 +115,37 @@ class GameState {
     return team;
   }
 
+  constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
+    const team: Character[] = [];
+    const spacing = Math.floor((ctxWidth / 2) / 4);
+    const offset = Math.floor((ctxWidth / 2));
+
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id);
+    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id);
+    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id);
+    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
+
+    return team;
+  }
+
   handleAttack(attack: any) {
     const target = this.team.find((character) => character.name == attack.target);
-    console.log("Target", target);
+  }
+
+  setEnemyTeam(enemyTeam: Character[]) {
+    if (enemyTeam.length != 3) {
+      console.error(`Team lenght mistmatch. Got ${enemyTeam.length}, want 3`);
+    }
+    //TODO handle this error
+    //text book bad dev moment
+    this.enemyTeam = enemyTeam;
   }
 
 }
@@ -94,19 +153,23 @@ class GameState {
 const BASE_WIDTH = 320;
 const BASE_HEIGHT = 180;
 
+interface CommunicationProtocolDriver {
+  sendTurn(attacks: Attack[]): void,
+  connect(): void,
+}
+
 class Game {
   private ctx: CanvasRenderingContext2D;
   private eventBus: EventBus;
   private ui: UI;
   private uiState: UIMode;
-  public commsDriver: CommunicationProtocolDriver;
+  public commsDriver!: CommunicationProtocolDriver;
   public gameState: GameState;
   public displayDriver: DisplayDriver;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
-    this.commsDriver = new CommunicationProtocolDriver()
     this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT);
     this.ui = new UI(this.eventBus, BASE_WIDTH, BASE_HEIGHT);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
@@ -129,13 +192,22 @@ class Game {
       case EventType.CREATE_ROOM:
         this.uiState = UIMode.Waiting;
         this.ui.setMode(this.uiState);
-        (async () => {
-          const roomCode = await this.commsDriver.createRoom();
-          const modal = this.ui.curMode.peek()!.findById("gameId") as Modal;
-          modal.setText(`Room Number: ${roomCode}`);
-          // set the modal here. need to add setting to UI
-        })();
-
+        this.commsDriver = new WebSocketDriver(this.eventBus);
+        break;
+      case EventType.CONNECT:
+        console.log("Connected");
+        break;
+      case EventType.START_GAME:
+        this.uiState = UIMode.InGame;
+        this.ui.setMode(this.uiState);
+        break;
+      case EventType.SINGLE_PLAYER:
+        this.commsDriver = new NOPCommunicationsDriver(this.eventBus);
+        this.commsDriver.connect();
+        break;
+      case EventType.ROOM_ID_RECIEVED:
+        const modal = this.ui.curMode.peek()!.findById("gameId") as Modal;
+        modal.setText(`Room Number: ${event.data}`);
         break;
       case EventType.UI_TOGGLE:
         this.ui.curMode.push(event.data);
@@ -150,7 +222,11 @@ class Game {
         console.log(event);
         break;
       case EventType.OUTGOINGATTACK:
-        console.log(event);
+        const full = this.gameState.queAttack(event.data);
+        if (full) {
+          this.commsDriver.sendTurn(this.gameState.attackQueue);
+          this.gameState.flushQueue();
+        }
         break;
       case EventType.INCOMINGATTACK:
         this.gameState.handleAttack(event.data);
@@ -158,15 +234,54 @@ class Game {
   }
 }
 
-class CommunicationProtocolDriver {
-  constructor() { }
+// RIP browsers dont support raw tcp connections 
+// need to write a damn proxy for this crappy game :')
+class WebSocketDriver {
+  eventBus: EventBus;
 
-  createRoom(): Promise<string> {
-    return new Promise((res, rej) => {
-      setTimeout(() => {
-        res("12345678");
-      }, 1000);
-    });
+  constructor(eventBus: EventBus) {
+    this.eventBus = eventBus;
+  }
+
+  connect() { }
+
+  sendTurn() { }
+}
+
+class NOPCommunicationsDriver {
+  eventBus: EventBus;
+  team: Character[];
+
+  constructor(eventBus: EventBus) {
+    this.eventBus = eventBus;
+    this.team = this.constructTeam(BASE_WIDTH, BASE_HEIGHT);
+  }
+
+  connect() {
+    this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
+  }
+
+  sendTurn() {
+
+  }
+
+  constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
+    const team: Character[] = [];
+    const spacing = Math.floor((ctxWidth / 2) / 4);
+
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id);
+    const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id);
+    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id);
+    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
+
+    return team;
   }
 }
 
@@ -395,7 +510,8 @@ class DisplayDriver {
 
     // this.drawDebug();
     this.drawStage();
-    this.drawCharacters();
+    this.drawTeam();
+    this.drawEnemyTeam();
     this.drawUI(this.ui.curMode.peek()!);
   }
 
@@ -450,12 +566,21 @@ class DisplayDriver {
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
   }
 
-  private drawCharacters(): void {
+  private drawTeam(): void {
     this.gameState.team.forEach((character, i) => {
       const x = character.position.x;
       const y = character.position.y;
       const sPos = new Vector(x, y);
       this.drawSprite(character.sprite, sPos)
+    });
+  }
+
+  private drawEnemyTeam(): void {
+    this.gameState.enemyTeam.forEach((character) => {
+      const x = character.position.x;
+      const y = character.position.y;
+      const sPos = new Vector(x, y);
+      this.drawMirroredSprite(character.sprite, sPos)
     });
   }
 
@@ -494,6 +619,33 @@ class DisplayDriver {
     // this.ctx.lineTo(centerX, y + height); // Center line end
     // this.ctx.stroke();
     //
+  }
+
+  private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
+    const x = this.cX(pos.x * this.scale - Math.floor(sprite.size.x * this.scale / 2));
+    const y = this.cY(pos.y * this.scale);
+    const width = sprite.size.x * this.scale;
+    const height = sprite.size.y * this.scale;
+
+    this.ctx.save();
+
+    this.ctx.translate(x + width, y);
+    this.ctx.scale(-1, 1);
+
+    this.ctx.drawImage(
+      sprite.image,
+      sprite.start.x,
+      sprite.start.y,
+      sprite.size.x,
+      sprite.size.y,
+      0,
+      0,
+      width,
+      height
+    );
+
+    this.ctx.restore();
+
   }
 
   private drawUI(curScreen: UIElement) {
@@ -739,6 +891,7 @@ function constructMainScreen(ui: UI): void {
   ui.Begin(UIMode.TitleScreen);
   ui.beginPanel(defaultOpts, null, ((BASE_WIDTH * 0.5) - (pnlWidth * 0.5)), ((BASE_HEIGHT * 0.5) - (pnlHeight * 0.5)), pnlWidth, pnlHeight);
   ui.button(defaultButtonOpts, "Make Room", [ConstructEvent(EventType.CREATE_ROOM, "")]);
+  ui.button(defaultButtonOpts, "Single Player", [ConstructEvent(EventType.SINGLE_PLAYER, "")]);
   ui.button(defaultButtonOpts, "Join Room", [ConstructEvent(EventType.JOIN_ROOM, "")]);
   ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
   ui.endPanel();
@@ -805,9 +958,9 @@ function constructGameScreen(ui: UI): void {
 
       ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, null, x, y, pnlWidth, pnlHeight);
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.INCOMINGATTACK, { character: Characters.Knight.id, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
       ui.endPanel();
       ui.endMenu();
     });
