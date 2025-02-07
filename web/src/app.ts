@@ -38,7 +38,7 @@ function ConstructEvent(eventType: EventType, data: any): event {
 }
 
 function AddVectors(a: Vector, b: Vector): Vector {
-  return new Vector(a.x + b.x, a.y - b.y);
+  return new Vector(a.x + b.x, a.y + b.y);
 }
 
 type Move = {
@@ -104,15 +104,15 @@ class GameState {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true);
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
     const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true);
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true);
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
@@ -124,15 +124,15 @@ class GameState {
     const spacing = Math.floor((ctxWidth / 2) / 4);
     const offset = Math.floor((ctxWidth / 2));
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true);
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
     const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true);
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
     const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true);
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
     const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
@@ -417,7 +417,7 @@ const Characters = {
     ],
     id: SpriteID.BlueWitch,
     animations: {
-      ["idle"]: { start: new Vector(250, 0), size: new Vector(32, 40), frames: 6, offset: new Vector(0, 40) },
+      ["idle"]: { start: new Vector(250, 0), size: new Vector(111, 48), frames: 6, offset: new Vector(0, 48) },
       ["damage"]: { start: new Vector(218, 0), size: new Vector(32, 40), frames: 3, offset: new Vector(0, 40) },
       ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 40) },
       ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 40) },
@@ -494,6 +494,7 @@ class Sprite {
 
     const elapsed = timestamp - this.lastFrameTime;
 
+
     if (elapsed >= this.frameDelay) {
       this.lastFrameTime = timestamp;
 
@@ -506,6 +507,11 @@ class Sprite {
         animationStart,
         new Vector(animationOffset.x * this.frame, animationOffset.y * this.frame)
       );
+      
+      if (this.offset.y == 40) {
+        console.log(this.start)
+      }
+    
     }
 
     requestAnimationFrame(this.animate.bind(this));
