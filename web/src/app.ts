@@ -15,6 +15,7 @@ enum EventType {
   UI_UNTOGGLE_ID,
   UNUSED,
   CHOOSE_ACTIVE_CHARACTER, // cuurrently not used
+  QUEATTACK,
   OUTGOINGATTACK,
   INCOMINGATTACK,
 }
@@ -139,7 +140,20 @@ class GameState {
     return team;
   }
 
-  handleAttack(attack: any) {
+  async handleOutgoingAttack(animating: Promise<void> | null, attack: any) {
+    if (animating) {
+      await animating;
+    }
+
+    console.log("handleOutgoingAttack");
+  }
+
+  async handleIncomingAttack(animating: Promise<void> | null, attack: any) {
+    if (animating) {
+      await animating;
+    }
+
+    console.log("handleIncomingAttack");
     const target = this.team.find((character) => character.name == attack.target);
   }
 
@@ -170,6 +184,8 @@ class Game {
   public commsDriver!: CommunicationProtocolDriver;
   public gameState: GameState;
   public displayDriver: DisplayDriver;
+  animator: Animator;
+  animationPromise: Promise<void> | null = null;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -177,6 +193,7 @@ class Game {
     this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT);
     this.ui = new UI(this.eventBus, BASE_WIDTH, BASE_HEIGHT);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
+    this.animator = new Animator();
     this.uiState = UIMode.TitleScreen;
 
     requestAnimationFrame(() => {
@@ -225,16 +242,40 @@ class Game {
       case EventType.CHOOSE_ACTIVE_CHARACTER:
         console.log(event);
         break;
-      case EventType.OUTGOINGATTACK:
-        const full = this.gameState.queAttack(event.data);
-        if (full) {
-          this.commsDriver.sendTurn(this.gameState.attackQueue);
-          this.gameState.flushQueue();
+      case EventType.QUEATTACK:
+        if (this.gameState.queAttack(event.data)) {
+          this.update(ConstructEvent(EventType.OUTGOINGATTACK, this.gameState.attackQueue));
         }
         break;
+      case EventType.OUTGOINGATTACK:
+        this.animationPromise = this.animator.animate(event.data);
+        this.gameState.handleOutgoingAttack(this.animationPromise, event.data)
+          .then(() => {
+            this.commsDriver.sendTurn(this.gameState.attackQueue);
+            this.gameState.flushQueue();
+          });
+        break;
       case EventType.INCOMINGATTACK:
-        this.gameState.handleAttack(event.data);
+        this.animationPromise = this.animator.animate(event.data);
+        this.gameState.handleIncomingAttack(this.animationPromise, event.data);
+        break;
     }
+  }
+
+
+}
+
+class Animator {
+  constructor() { }
+
+  animate(data: any): Promise<void> {
+    return new Promise((res) => {
+      console.log("Animating...");
+      setTimeout(() => {
+        console.log("Done animating");
+        res()
+      }, 2000);
+    });
   }
 }
 
@@ -265,8 +306,8 @@ class NOPCommunicationsDriver {
     this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
   }
 
-  sendTurn() {
-
+  sendTurn(attacks: Attack[]): void {
+    this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, "Hello"));
   }
 
   constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
@@ -507,11 +548,11 @@ class Sprite {
         animationStart,
         new Vector(animationOffset.x * this.frame, animationOffset.y * this.frame)
       );
-      
+
       if (this.offset.y == 40) {
         console.log(this.start)
       }
-    
+
     }
 
     requestAnimationFrame(this.animate.bind(this));
@@ -1056,9 +1097,9 @@ function constructGameScreen(ui: UI): void {
 
       ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, null, x, y, pnlWidth, pnlHeight);
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.OUTGOINGATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
       ui.endPanel();
       ui.endMenu();
     });
