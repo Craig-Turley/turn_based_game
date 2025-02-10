@@ -1,6 +1,9 @@
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
+const BASE_WIDTH = 320;
+const BASE_HEIGHT = 180;
+
 enum EventType {
   CREATE_ROOM,
   ROOM_ID_RECIEVED,
@@ -124,8 +127,6 @@ class GameState {
     return team;
   }
 
-
-
   async handleOutgoingAttack(animating: Promise<void> | null, data: Attack) {
     if (animating) {
       await animating;
@@ -154,9 +155,6 @@ class GameState {
   }
 
 }
-
-const BASE_WIDTH = 320;
-const BASE_HEIGHT = 180;
 
 interface CommunicationProtocolDriver {
   sendTurn(attacks: Attack[]): void,
@@ -240,7 +238,7 @@ class Game {
       case EventType.OUTGOINGATTACK:
         (async () => {
           for (const attack of event.data) {
-            this.animationPromise = this.animator.animate(attack);
+            this.animationPromise = this.animator.animate(attack.attack.name, attack);
             await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
             this.animationPromise = null;
           }
@@ -249,40 +247,35 @@ class Game {
         })();
         break;
       case EventType.INCOMINGATTACK:
-        this.animationPromise = this.animator.animate(event.data);
-        this.gameState.handleIncomingAttack(this.animationPromise, event.data);
+        // this.animationPromise = this.animator.animate(event.data);
+        // this.gameState.handleIncomingAttack(this.animationPromise, event.data);
         break;
     }
   }
 }
 
 class Animator {
-  constructor() { }
+  animations: { [key: string]: (data:Attack) => Promise<void> }; 
 
-  animate(data: Attack): Promise<void> {
-    return new Promise((res) => {
-      const frames = 15;
-      const distance = data.target.position.x - data.character.position.x - data.character.sprite.size.x / 2;
-      const offset = distance / frames;
+  constructor() { 
+    this.animations = {};
+    this.registerAnimation("Slash", animateKnightSlash);
+  }
 
-      console.log(offset);
-
-      data.character.sprite.setAnimation(data.attack.name);
-
-      const animate = (frame: number) => {
-        if (frame >= frames) {
-          data.character.sprite.setAnimation("idle");
-          if (data.character.sprite.id == SpriteID.BlueWitch) { }
+  animate(key: string, data: Attack): Promise<void> {
+    console.log(`Animating attack ${key}`);
+    if (!(key in this.animations)) {
+      return new Promise((res) => {
+        setTimeout(() => {
           res();
-          return;
-        }
+        }, 2000);
+      })
+    }
+    return this.animations[key](data);
+  }
 
-        data.character.position.x += offset;
-        requestAnimationFrame(() => animate(frame + 1));
-      };
-
-      animate(0);
-    });
+  registerAnimation(key: string, animation: (data: Attack) => Promise<void>) {
+    this.animations[key] = animation;
   }
 }
 
@@ -499,6 +492,32 @@ const Characters = {
     name: "Necromancer",
   },
 };
+
+function animateKnightSlash(data: Attack): Promise<void> {
+  const { character, attack, target } = data;
+  
+  const frames = 15;
+  const distance = target.position.x - character.position.x - character.sprite.size.x / 2;
+  const offset = distance / frames;
+
+  character.sprite.setAnimation("run");
+  
+  return new Promise((res) => {
+    const animate = (frame: number) => {
+      if (frame >= frames) {
+        data.character.sprite.setAnimation("idle");
+        res();
+        return;
+      }
+
+      data.character.position.x += offset;
+      requestAnimationFrame(() => animate(frame + 1));
+    };
+
+    animate(0);
+  });
+
+}
 
 class Sprite {
   image: CanvasImageSource;
@@ -726,7 +745,6 @@ class DisplayDriver {
       const x = character.position.x;
       const y = character.position.y;
       const sPos = new Vector(x, y);
-      console.log(character.name, y);
       this.drawSprite(character.sprite, sPos);
       this.drawHealth(character, sPos);
     });
