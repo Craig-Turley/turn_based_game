@@ -42,15 +42,21 @@ function AddVectors(a: Vector, b: Vector): Vector {
   return new Vector(a.x + b.x, a.y + b.y);
 }
 
+enum Target {
+  EnemyTeam,
+  OwnTeam,
+}
+
 type Move = {
   name: string,
   damage: number, // positive or negative based on healing effects and stuff 
+  target: Target,
 }
 
 type Attack = {
-  character: SpriteID,
+  character: Character,
   attack: Move,
-  target: SpriteID,
+  target: Character,
 }
 
 class Character {
@@ -79,7 +85,7 @@ class GameState {
 
   constructor(ctxWidth: number, ctxHeight: number) {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
-    this.enemyTeam = this.constructEnemyTeam(ctxWidth, ctxHeight);
+    this.enemyTeam = [];
     this.attackQueue = [];
     this.roomKey = null;
   }
@@ -88,9 +94,7 @@ class GameState {
     const index = this.attackQueue.findIndex((qattack) => attack.character === qattack.character);
 
     if (index !== -1) {
-      console.log(this.attackQueue[index], attack);
       this.attackQueue.splice(index, 1);
-      console.log("Removed existing attack from queue.");
     }
 
     this.attackQueue.push(attack);
@@ -120,32 +124,16 @@ class GameState {
     return team;
   }
 
-  constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
-    const team: Character[] = [];
-    const spacing = Math.floor((ctxWidth / 2) / 4);
-    const offset = Math.floor((ctxWidth / 2));
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
-    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
-    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
-    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
-    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
-
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
-    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
-    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
-
-    return team;
-  }
-
-  async handleOutgoingAttack(animating: Promise<void> | null, attack: any) {
+  async handleOutgoingAttack(animating: Promise<void> | null, data: Attack) {
     if (animating) {
       await animating;
     }
 
-    console.log("handleOutgoingAttack");
+    const { attack, character, target } = data;
+    target.health -= attack.damage;
+
   }
 
   async handleIncomingAttack(animating: Promise<void> | null, attack: any) {
@@ -153,7 +141,6 @@ class GameState {
       await animating;
     }
 
-    console.log("handleIncomingAttack");
     const target = this.team.find((character) => character.name == attack.target);
   }
 
@@ -217,6 +204,9 @@ class Game {
         break;
       case EventType.CONNECT:
         console.log("Connected");
+        // probably going to need to add a constructor for online matches when just given a list of characters
+        this.gameState.setEnemyTeam(event.data);
+        constructGameScreen(this.ui);
         break;
       case EventType.START_GAME:
         this.uiState = UIMode.InGame;
@@ -248,12 +238,15 @@ class Game {
         }
         break;
       case EventType.OUTGOINGATTACK:
-        this.animationPromise = this.animator.animate(event.data);
-        this.gameState.handleOutgoingAttack(this.animationPromise, event.data)
-          .then(() => {
-            this.commsDriver.sendTurn(this.gameState.attackQueue);
-            this.gameState.flushQueue();
-          });
+        (async () => {
+          for (const attack of event.data) {
+            this.animationPromise = this.animator.animate(attack);
+            await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
+            this.animationPromise = null;
+          }
+          this.commsDriver.sendTurn(this.gameState.attackQueue);
+          this.gameState.flushQueue();
+        })();
         break;
       case EventType.INCOMINGATTACK:
         this.animationPromise = this.animator.animate(event.data);
@@ -261,20 +254,34 @@ class Game {
         break;
     }
   }
-
-
 }
 
 class Animator {
   constructor() { }
 
-  animate(data: any): Promise<void> {
+  animate(data: Attack): Promise<void> {
     return new Promise((res) => {
-      console.log("Animating...");
-      setTimeout(() => {
-        console.log("Done animating");
-        res()
-      }, 2000);
+      const frames = 15;
+      const distance = data.target.position.x - data.character.position.x - data.character.sprite.size.x / 2;
+      const offset = distance / frames;
+
+      console.log(offset);
+
+      data.character.sprite.setAnimation(data.attack.name);
+
+      const animate = (frame: number) => {
+        if (frame >= frames) {
+          data.character.sprite.setAnimation("idle");
+          if (data.character.sprite.id == SpriteID.BlueWitch) { }
+          res();
+          return;
+        }
+
+        data.character.position.x += offset;
+        requestAnimationFrame(() => animate(frame + 1));
+      };
+
+      animate(0);
     });
   }
 }
@@ -296,35 +303,39 @@ class WebSocketDriver {
 class NOPCommunicationsDriver {
   eventBus: EventBus;
   team: Character[];
+  enemyTeam: Character[];
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
-    this.team = this.constructTeam(BASE_WIDTH, BASE_HEIGHT);
+    this.team = this.constructEnemyTeam(BASE_WIDTH, BASE_HEIGHT);
+    this.enemyTeam = this.eventBus.bus.gameState.team; // this is the users team
   }
 
   connect() {
+    this.eventBus.send(ConstructEvent(EventType.CONNECT, this.team));
     this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
   }
 
   sendTurn(attacks: Attack[]): void {
-    this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, "Hello"));
+    // this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, "RALRKJ"));
   }
 
-  constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
+  constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
+    const offset = Math.floor((ctxWidth / 2));
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations);
-    const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
-    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
+    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id + "enemy"));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations);
-    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
-    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
+    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id + "enemy"));
 
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations);
-    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
-    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
+    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
 
     return team;
   }
@@ -434,8 +445,8 @@ const Characters = {
     size: new Vector(120, 80),
     offset: new Vector(0, 0),
     moves: [
-      { name: "Slash", damage: 10 },
-      { name: "Defend", damage: 0 },
+      { name: "Slash", damage: 5, target: Target.EnemyTeam },
+      { name: "Defend", damage: 0, target: Target.OwnTeam },
     ],
     id: SpriteID.Knight,
     name: "Knight",
@@ -453,17 +464,17 @@ const Characters = {
     size: new Vector(32, 40),
     offset: new Vector(0, 0),
     moves: [
-      { name: "Heal", damage: - 4 },
-      { name: "Arcane Burst", damage: 7 },
+      { name: "Heal", damage: - 3, target: Target.OwnTeam },
+      { name: "Arcane Burst", damage: 4, target: Target.EnemyTeam },
     ],
     id: SpriteID.BlueWitch,
     animations: {
-      ["idle"]: { start: new Vector(250, 0), size: new Vector(111, 48), frames: 6, offset: new Vector(0, 48) },
+      ["idle"]: { start: new Vector(250, 0), size: new Vector(32, 48), frames: 6, offset: new Vector(0, 48) },
       ["damage"]: { start: new Vector(218, 0), size: new Vector(32, 40), frames: 3, offset: new Vector(0, 40) },
-      ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 40) },
+      ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 48) },
       ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 40) },
       ["Heal"]: { start: new Vector(186, 0), size: new Vector(32, 48), frames: 5, offset: new Vector(0, 48) },
-      ["Arcane Burst"]: { start: new Vector(0, 0), size: new Vector(186, 48), frames: 9, offset: new Vector(0, 48) }
+      ["Arcane Burst"]: { start: new Vector(0, 0), size: new Vector(186, 48), frames: 9, offset: new Vector(0, 48) },
     },
     name: "Witch",
   },
@@ -472,11 +483,16 @@ const Characters = {
     start: new Vector(0, 0),
     size: new Vector(160, 128),
     moves: [
-      { name: "Bone Shield", damage: 0 },
-      { name: "Dark Pulse", damage: 7 },
+      { name: "Bone Shield", damage: 0, target: Target.OwnTeam },
+      { name: "Dark Pulse", damage: 6, target: Target.EnemyTeam },
     ],
     animations: {
       ["idle"]: { start: new Vector(0, 0), size: new Vector(160, 128), frames: 8, offset: new Vector(160, 0) },
+      ["run"]: { start: new Vector(0, 128), size: new Vector(160, 128), frames: 8, offset: new Vector(160, 0) },
+      ["damage"]: { start: new Vector(0, 768), size: new Vector(160, 128), frames: 5, offset: new Vector(160, 0) },
+      ["death"]: { start: new Vector(0, 896), size: new Vector(160, 128), frames: 8, offset: new Vector(160, 0) },
+      ["Dark Pulse"]: { start: new Vector(0, 256), size: new Vector(160, 128), frames: 13, offset: new Vector(160, 0) },
+      ["Bone Shield"]: { start: new Vector(0, 512), size: new Vector(160, 128), frames: 17, offset: new Vector(160, 0) },
     },
     offset: new Vector(0, 0),
     id: SpriteID.Necromancer,
@@ -493,6 +509,7 @@ class Sprite {
   animations: { [key: string]: SpriteAnimation };
   currentAnimation: string;
   frame: number;
+  fps: number;
   lastFrameTime: number;
   frameDelay: number;
 
@@ -517,24 +534,27 @@ class Sprite {
     this.currentAnimation = "idle";
     this.frame = 0;
     this.lastFrameTime = 0;
-    this.frameDelay = 1000 / fps;
+    this.fps = fps;
+    this.frameDelay = 1000 / this.fps;
 
     if (canAnimate) {
       requestAnimationFrame(this.animate.bind(this));
     }
   }
 
-  setAnimation(animation: string) {
+  setAnimation(animation: string, fps?: number) {
+    this.currentAnimation = animation;
     this.size = this.animations[animation].size;
     this.start = this.animations[animation].start;
     this.frame = 0;
+    this.fps = fps ?? 10;
+    this.frameDelay = 1000 / this.fps;
   }
 
   animate(timestamp: number) {
-    if (!this.lastFrameTime) this.lastFrameTime = timestamp; // Initialize on first frame
+    if (!this.lastFrameTime) this.lastFrameTime = timestamp; // init on first frame
 
     const elapsed = timestamp - this.lastFrameTime;
-
 
     if (elapsed >= this.frameDelay) {
       this.lastFrameTime = timestamp;
@@ -548,10 +568,6 @@ class Sprite {
         animationStart,
         new Vector(animationOffset.x * this.frame, animationOffset.y * this.frame)
       );
-
-      if (this.offset.y == 40) {
-        console.log(this.start)
-      }
 
     }
 
@@ -706,11 +722,13 @@ class DisplayDriver {
   }
 
   private drawTeam(): void {
-    this.gameState.team.forEach((character, i) => {
+    this.gameState.team.forEach((character) => {
       const x = character.position.x;
       const y = character.position.y;
       const sPos = new Vector(x, y);
-      this.drawSprite(character.sprite, sPos)
+      console.log(character.name, y);
+      this.drawSprite(character.sprite, sPos);
+      this.drawHealth(character, sPos);
     });
   }
 
@@ -720,6 +738,7 @@ class DisplayDriver {
       const y = character.position.y;
       const sPos = new Vector(x, y);
       this.drawMirroredSprite(character.sprite, sPos)
+      this.drawHealth(character, sPos);
     });
   }
 
@@ -740,24 +759,30 @@ class DisplayDriver {
       height,
     );
 
-    //debug
-    // if (sprite.id !== SpriteID.BlueWitch) {
-    //   return;
-    // }
-    //
-    // console.log(`Sprite ID: ${sprite.id}, Width: ${width}, Position: (${x}, ${y})`);
-    //
-    // this.ctx.beginPath();
-    // this.ctx.strokeStyle = 'red';
-    // this.ctx.rect(x, y, width, height); // No need to use cX for dimensions
-    // this.ctx.stroke();
-    //
-    // const centerX = x + width / 2;
-    // this.ctx.beginPath();
-    // this.ctx.moveTo(centerX, y); // Center line start
-    // this.ctx.lineTo(centerX, y + height); // Center line end
-    // this.ctx.stroke();
-    //
+    this.ctx.strokeRect(x, y, width, height);
+  }
+
+  drawHealth(character: Character, pos: Vector) {
+    this.ctx.font = `${3 * this.scale}px "Press Start 2P"`;
+    const line = `HP: ${character.health}`;
+    const textMetrics = this.ctx.measureText(line);
+
+    const width = textMetrics.width * 1.5;
+    const height = Math.floor((textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent) * 2);
+
+    const x = this.cX(pos.x * this.scale);
+    const y = this.cY(pos.y * this.scale);
+    const swidth = character.sprite.size.x;
+    const sheight = character.sprite.size.y;
+
+    // this.ctx.fillStyle = BackgroundColor.IvoryWhite;
+    // this.ctx.fillRect(x, y, swidth, sheight);
+
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    this.ctx.fillRect(Math.floor(x - (width / 2)), Math.floor(y - (height / 2)), width, height);
+
+    this.ctx.fillStyle = BackgroundColor.IvoryWhite;
+    this.ctx.fillText(line, x, y);
   }
 
   private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
@@ -969,8 +994,10 @@ function initIdGenerator(): () => number {
 enum BackgroundColor {
   IvoryWhite = "#FFFFF0",
   LightGrey = "#D3D3D3",
+  DarkGrey = "#3b3b3b",
   Black = "#000000",
   LightRed = "#FF7F7F",
+  LightGreen = "#90ee90",
   DarkTransparentGrey = "rgba(50, 50, 50, 1)",
 }
 
@@ -1030,9 +1057,9 @@ function constructMainScreen(ui: UI): void {
   ui.Begin(UIMode.TitleScreen);
   ui.beginPanel(defaultOpts, null, ((BASE_WIDTH * 0.5) - (pnlWidth * 0.5)), ((BASE_HEIGHT * 0.5) - (pnlHeight * 0.5)), pnlWidth, pnlHeight);
   ui.button(defaultButtonOpts, "Make Room", [ConstructEvent(EventType.CREATE_ROOM, "")]);
-  ui.button(defaultButtonOpts, "Single Player", [ConstructEvent(EventType.SINGLE_PLAYER, "")]);
   ui.button(defaultButtonOpts, "Join Room", [ConstructEvent(EventType.JOIN_ROOM, "")]);
-  ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
+  ui.button(defaultButtonOpts, "Single Player", [ConstructEvent(EventType.SINGLE_PLAYER, "")]);
+  ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.DarkGrey }, "Change Team", [ConstructEvent(EventType.JOIN_ROOM, "")]);
   ui.endPanel();
   ui.End();
 }
@@ -1070,6 +1097,18 @@ function constructGameScreen(ui: UI): void {
   let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
 
   const team = [...ui.eventBus.bus.gameState.team].reverse();
+  const enemyTeam = [...ui.eventBus.bus.gameState.enemyTeam].reverse();
+
+  const targetMap = {
+    [Target.OwnTeam]: team,
+    [Target.EnemyTeam]: enemyTeam,
+  }
+
+  const targetColorMap = {
+    [Target.OwnTeam]: BackgroundColor.LightGreen,
+    [Target.EnemyTeam]: BackgroundColor.LightRed,
+  }
+
   ui.Begin(UIMode.InGame, "characterScreen");
 
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
@@ -1097,9 +1136,11 @@ function constructGameScreen(ui: UI): void {
 
       ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, null, x, y, pnlWidth, pnlHeight);
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Knight", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Witch", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
-      ui.button({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightRed }, "Necromancer", [ConstructEvent(EventType.QUEATTACK, { character: character.name, attack: attack, target: Characters.Knight.id }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+
+      targetMap[attack.target].forEach((target) => {
+        ui.button({ ...defaultButtonOpts, backgroundColor: targetColorMap[attack.target] }, target.name, [ConstructEvent(EventType.QUEATTACK, { character: character, attack: attack, target: target }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+      });
+
       ui.endPanel();
       ui.endMenu();
     });
@@ -1164,14 +1205,12 @@ class UI {
     this.currentBuildMode = UIMode.TitleScreen;
     constructMainScreen(this);
     constructWaitingScreen(this);
-    constructGameScreen(this);
     document.addEventListener("click", (e: MouseEvent) => {
       const mousePosition = this.mouse(e);
       for (const element of this.curMode.peek()!.children) {
         const btn = this.buttonClicked(element, mousePosition);
 
         if (btn instanceof Button) {
-          // console.log(btn.text);
           const events = btn.eventList();
           events.forEach((e) => {
             this.eventBus.send(e);
@@ -1325,7 +1364,6 @@ class UI {
     const x = Math.floor(this.eventBus.bus.displayDriver.rX((e.clientX - rect.left) * (canvas.width / rect.width)) / scale);
     const y = Math.floor(this.eventBus.bus.displayDriver.rY((e.clientY - rect.top) * (canvas.height / rect.height)) / scale);
 
-    // console.log(x, y)
 
     return { x: x, y: y };
   }
