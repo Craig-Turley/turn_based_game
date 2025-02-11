@@ -113,15 +113,15 @@ class GameState {
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
-    const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y * 2);
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
-    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y * 2);
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
-    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y * 2);
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
     return team;
@@ -733,12 +733,12 @@ class DisplayDriver {
     // this is the bottom part of the stage btw
     const blockwidth = this.stage.floortile.size.x;
     for (let i = 0 - this.baseWidth * 2; i < this.cX(this.ctxWidth); i += blockwidth) {
-      const floorPos = new Vector(i, this.baseHeight - this.stage.floortile.size.y);
+      const floorPos = new Vector(i, this.baseHeight - this.stage.floortile.size.y / 2);
       this.drawSprite(this.stage.floortile, floorPos);
       // underground. not sure about this
       let k = 0;
       for (let j = this.ctxHeight; j < this.ctxHeight + this.baseHeight; j += blockwidth) {
-        const undergroundPos = new Vector(i, this.baseHeight + (k * blockwidth));
+        const undergroundPos = new Vector(i, this.baseHeight + (k * blockwidth) + this.stage.floortile.size.y / 2);
         this.drawSprite(this.stage.undergroundtile, undergroundPos);
         k++;
       }
@@ -752,9 +752,17 @@ class DisplayDriver {
     this.gameState.team.forEach((character) => {
       const x = character.position.x;
       const y = character.position.y;
+
+      // this.ctx.save();
+      // this.ctx.beginPath();
+      // this.ctx.fillStyle = BackgroundColor.IvoryWhite;
+      // this.ctx.arc(x * this.scale, y * this.scale, 10, 0, 2 * Math.PI);
+      // this.ctx.fill();
+      // this.ctx.restore();
+
       const sPos = new Vector(x, y);
       this.drawSprite(character.sprite, sPos);
-      this.drawHealth(character);
+      // this.drawHealth(character);
     });
   }
 
@@ -769,8 +777,8 @@ class DisplayDriver {
   }
 
   private drawSprite(sprite: Sprite, pos: Vector): void {
-    const x = this.cX(this.scale * (pos.x - Math.floor(sprite.size.x / 2)));
-    const y = this.cY(pos.y * this.scale);
+    const x = this.cX(this.scale * Math.floor((pos.x - sprite.size.x / 2)));
+    const y = this.cY(this.scale * Math.floor((pos.y - sprite.size.y / 2)));
     const width = sprite.size.x * this.scale;
     const height = sprite.size.y * this.scale;
     this.ctx.drawImage(
@@ -785,12 +793,19 @@ class DisplayDriver {
       height,
     );
 
-    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.fillStyle = BackgroundColor.IvoryWhite;
+    this.ctx.arc(this.cX(pos.x) * this.scale, this.cY(pos.y)* this.scale, 10, 0, 2 * Math.PI);
+    this.ctx.fill();
+    this.ctx.restore();
 
-    const nx = this.cX(this.scale * (pos.x));
-    const ny = this.cY(this.scale * (pos.y));
-
-    this.ctx.strokeRect(x + (this.scale * sprite.boundingBox.x), y, sprite.boundingBox.x * this.scale, sprite.boundingBox.y * this.scale);
+    // this.ctx.strokeRect(x, y, width, height);
+    //
+    // const nx = this.cX(this.scale * (pos.x));
+    // const ny = this.cY(this.scale * (pos.y));
+    //
+    // this.ctx.strokeRect(x + (this.scale * sprite.boundingBox.x), y, sprite.boundingBox.x * this.scale, sprite.boundingBox.y * this.scale);
 
     // this.ctx.save();
     // this.ctx.beginPath();
@@ -828,9 +843,11 @@ class DisplayDriver {
     this.ctx.fillStyle = BackgroundColor.IvoryWhite;
     this.ctx.fillText(line, x, y);
 
+    this.ctx.save();
     this.ctx.beginPath();
     this.ctx.arc(x, y, 1, 0, 2 * Math.PI);
     this.ctx.fill();
+    this.ctx.restore();
   }
 
   private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
