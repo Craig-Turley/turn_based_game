@@ -112,15 +112,15 @@ class GameState {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
     const necromancerPos = new Vector(spacing * 1, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
@@ -255,9 +255,9 @@ class Game {
 }
 
 class Animator {
-  animations: { [key: string]: (data:Attack) => Promise<void> }; 
+  animations: { [key: string]: (data: Attack) => Promise<void> };
 
-  constructor() { 
+  constructor() {
     this.animations = {};
     this.registerAnimation("Slash", animateKnightSlash);
   }
@@ -318,15 +318,15 @@ class NOPCommunicationsDriver {
     const spacing = Math.floor((ctxWidth / 2) / 4);
     const offset = Math.floor((ctxWidth / 2));
 
-    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, true, 15);
+    const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
     const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id + "enemy"));
 
-    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, true, 10);
+    const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
     const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id + "enemy"));
 
-    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, true, 5);
+    const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
     const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
 
@@ -360,8 +360,8 @@ class Stage {
       layers.push(img);
     });
     this.layers = layers;
-    this.floortile = new Sprite(Characters.StageFloor.image, Characters.StageFloor.start, Characters.StageFloor.size, Characters.StageFloor.offset, Characters.StageFloor.id, {});
-    this.undergroundtile = new Sprite(Characters.Underground.image, Characters.Underground.start, Characters.Underground.size, Characters.Underground.offset, Characters.Underground.id, {});
+    this.floortile = new Sprite(Characters.StageFloor.image, Characters.StageFloor.start, Characters.StageFloor.size, Characters.StageFloor.offset, Characters.StageFloor.id, {}, Characters.StageFloor.boundingBox, false);
+    this.undergroundtile = new Sprite(Characters.Underground.image, Characters.Underground.start, Characters.Underground.size, Characters.Underground.offset, Characters.Underground.id, {}, Characters.StageFloor.boundingBox, false);
     this.shading = Shading.SHADE;
   }
 
@@ -423,6 +423,7 @@ const Characters = {
     start: new Vector(0, 0),
     size: new Vector(21, 21),
     offset: new Vector(0, 0),
+    boundingBox: new Vector(21, 21),
     id: SpriteID.StageFloor,
   },
   Underground: {
@@ -430,6 +431,7 @@ const Characters = {
     start: new Vector(0, 0),
     size: new Vector(21, 21),
     offset: new Vector(0, 0),
+    boundingBox: new Vector(21, 21),
     id: SpriteID.Underground,
   },
   Knight: {
@@ -437,6 +439,7 @@ const Characters = {
     start: new Vector(0, 80),
     size: new Vector(120, 80),
     offset: new Vector(0, 0),
+    boundingBox: new Vector(38, 20),
     moves: [
       { name: "Slash", damage: 5, target: Target.EnemyTeam },
       { name: "Defend", damage: 0, target: Target.OwnTeam },
@@ -456,6 +459,7 @@ const Characters = {
     start: new Vector(32, 96),
     size: new Vector(32, 40),
     offset: new Vector(0, 0),
+    boundingBox: new Vector(32, 40),
     moves: [
       { name: "Heal", damage: - 3, target: Target.OwnTeam },
       { name: "Arcane Burst", damage: 4, target: Target.EnemyTeam },
@@ -475,6 +479,8 @@ const Characters = {
     image: "./assets/necromancer/sprite_sheet.png",
     start: new Vector(0, 0),
     size: new Vector(160, 128),
+    offset: new Vector(0, 0),
+    boundingBox: new Vector(38, 20),
     moves: [
       { name: "Bone Shield", damage: 0, target: Target.OwnTeam },
       { name: "Dark Pulse", damage: 6, target: Target.EnemyTeam },
@@ -487,7 +493,6 @@ const Characters = {
       ["Dark Pulse"]: { start: new Vector(0, 256), size: new Vector(160, 128), frames: 13, offset: new Vector(160, 0) },
       ["Bone Shield"]: { start: new Vector(0, 512), size: new Vector(160, 128), frames: 17, offset: new Vector(160, 0) },
     },
-    offset: new Vector(0, 0),
     id: SpriteID.Necromancer,
     name: "Necromancer",
   },
@@ -495,13 +500,13 @@ const Characters = {
 
 function animateKnightSlash(data: Attack): Promise<void> {
   const { character, attack, target } = data;
-  
+
   const frames = 15;
   const distance = target.position.x - character.position.x - character.sprite.size.x / 2;
   const offset = distance / frames;
 
   character.sprite.setAnimation("run");
-  
+
   return new Promise((res) => {
     const animate = (frame: number) => {
       if (frame >= frames) {
@@ -524,6 +529,7 @@ class Sprite {
   start: Vector;
   size: Vector;
   offset: Vector;
+  boundingBox: Vector;
   id: SpriteID;
   animations: { [key: string]: SpriteAnimation };
   currentAnimation: string;
@@ -539,6 +545,7 @@ class Sprite {
     offset: Vector,
     id: SpriteID,
     animations: { [key: string]: SpriteAnimation },
+    boundingBox: Vector,
     canAnimate: boolean = false,
     fps: number = 15
   ) {
@@ -548,6 +555,7 @@ class Sprite {
     this.size = size;
     this.start = canAnimate ? animations["idle"].start : start;
     this.offset = canAnimate ? animations["idle"].offset : start;
+    this.boundingBox = boundingBox;
     this.id = id;
     this.animations = animations;
     this.currentAnimation = "idle";
@@ -746,7 +754,7 @@ class DisplayDriver {
       const y = character.position.y;
       const sPos = new Vector(x, y);
       this.drawSprite(character.sprite, sPos);
-      this.drawHealth(character, sPos);
+      this.drawHealth(character);
     });
   }
 
@@ -756,12 +764,12 @@ class DisplayDriver {
       const y = character.position.y;
       const sPos = new Vector(x, y);
       this.drawMirroredSprite(character.sprite, sPos)
-      this.drawHealth(character, sPos);
+      this.drawHealth(character);
     });
   }
 
   private drawSprite(sprite: Sprite, pos: Vector): void {
-    const x = this.cX(pos.x * this.scale - Math.floor(sprite.size.x * this.scale / 2));
+    const x = this.cX(this.scale * (pos.x - Math.floor(sprite.size.x / 2)));
     const y = this.cY(pos.y * this.scale);
     const width = sprite.size.x * this.scale;
     const height = sprite.size.y * this.scale;
@@ -778,29 +786,51 @@ class DisplayDriver {
     );
 
     this.ctx.strokeRect(x, y, width, height);
+
+    const nx = this.cX(this.scale * (pos.x));
+    const ny = this.cY(this.scale * (pos.y));
+
+    this.ctx.strokeRect(x + (this.scale * sprite.boundingBox.x), y, sprite.boundingBox.x * this.scale, sprite.boundingBox.y * this.scale);
+
+    // this.ctx.save();
+    // this.ctx.beginPath();
+    // this.ctx.moveTo(nx, ny);
+    // this.ctx.lineTo(nx, ny + (this.scale * sprite.size.y));
+    // this.ctx.strokeStyle = 'blue';
+    // this.ctx.lineWidth = 3;
+    // this.ctx.stroke();
+    // this.ctx.restore();
   }
 
-  drawHealth(character: Character, pos: Vector) {
+  drawHealth(character: Character) {
     this.ctx.font = `${3 * this.scale}px "Press Start 2P"`;
     const line = `HP: ${character.health}`;
     const textMetrics = this.ctx.measureText(line);
 
-    const width = textMetrics.width * 1.5;
-    const height = Math.floor((textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent) * 2);
+    const linewidth = textMetrics.width * 1.5;
+    const lineheight = Math.floor((textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent) * 2);
+
+    // const pos = new Vector(
+    //   Math.floor((character.sprite.size.x + character.position.x) / 2),
+    //   Math.floor((character.sprite.size.y + character.position.y) / 2),
+    // );
+
+    const pos = character.position;
 
     const x = this.cX(pos.x * this.scale);
     const y = this.cY(pos.y * this.scale);
-    const swidth = character.sprite.size.x;
-    const sheight = character.sprite.size.y;
-
-    // this.ctx.fillStyle = BackgroundColor.IvoryWhite;
-    // this.ctx.fillRect(x, y, swidth, sheight);
+    const swidth = character.sprite.boundingBox.x * this.scale;
+    const sheight = character.sprite.boundingBox.y * this.scale;
 
     this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillRect(Math.floor(x - (width / 2)), Math.floor(y - (height / 2)), width, height);
+    this.ctx.fillRect(Math.floor(x - (linewidth / 2)), Math.floor(y - (lineheight / 2)), linewidth, lineheight);
 
     this.ctx.fillStyle = BackgroundColor.IvoryWhite;
     this.ctx.fillText(line, x, y);
+
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, 1, 0, 2 * Math.PI);
+    this.ctx.fill();
   }
 
   private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
