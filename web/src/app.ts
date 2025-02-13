@@ -21,6 +21,7 @@ enum EventType {
   QUEATTACK,
   OUTGOINGATTACK,
   INCOMINGATTACK,
+  CHARACTER_DEATH,
 }
 
 enum UIState {
@@ -66,6 +67,7 @@ class Character {
   public sprite: Sprite;
   public position: Vector;
   public health: number;
+  public maxhealth: number;
   public defense: number;
   public attack: Move[];
   public name: string;
@@ -74,9 +76,14 @@ class Character {
     this.sprite = sprite;
     this.position = position;
     this.health = health;
+    this.maxhealth = health;
     this.defense = defense;
     this.attack = attack;
     this.name = name;
+  }
+
+  maxHealth(): number {
+    return this.maxhealth;
   }
 }
 
@@ -85,9 +92,11 @@ class GameState {
   team: Character[];
   enemyTeam: Character[];
   attackQueue: Attack[];
+  eventBus: EventBus;
 
-  constructor(ctxWidth: number, ctxHeight: number) {
+  constructor(ctxWidth: number, ctxHeight: number, eventBus: EventBus) {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
+    this.eventBus = eventBus;
     this.enemyTeam = [];
     this.attackQueue = [];
     this.roomKey = null;
@@ -133,16 +142,30 @@ class GameState {
     }
 
     const { attack, character, target } = data;
-    target.health -= attack.damage;
+    const health = target.health - attack.damage;
+    if (health <= target.maxHealth()) {
+      target.health = health;
+    }
 
+    if (health <= 0) {
+      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
+    }
   }
 
-  async handleIncomingAttack(animating: Promise<void> | null, attack: any) {
+  async handleIncomingAttack(animating: Promise<void> | null, data: Attack) {
     if (animating) {
       await animating;
     }
 
-    const target = this.team.find((character) => character.name == attack.target);
+    const { attack, character, target } = data;
+    const health = target.health - attack.damage;
+    if (health <= target.maxHealth()) {
+      target.health = health;
+    }
+
+    if (health <= 0) {
+      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
+    }
   }
 
   setEnemyTeam(enemyTeam: Character[]) {
@@ -153,7 +176,6 @@ class GameState {
     //text book bad dev moment
     this.enemyTeam = enemyTeam;
   }
-
 }
 
 interface CommunicationProtocolDriver {
@@ -175,8 +197,8 @@ class Game {
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.eventBus = new EventBus(this);
-    this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT);
-    this.ui = new UI(this.eventBus, BASE_WIDTH, BASE_HEIGHT);
+    this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT, this.eventBus);
+    this.ui = new UI(this.eventBus);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
     this.animator = new Animator();
     this.uiState = UIMode.TitleScreen;
@@ -205,6 +227,7 @@ class Game {
         // probably going to need to add a constructor for online matches when just given a list of characters
         this.gameState.setEnemyTeam(event.data);
         constructGameScreen(this.ui);
+        constructOpponentTurnScreen(this.ui);
         break;
       case EventType.START_GAME:
         this.uiState = UIMode.InGame;
@@ -232,6 +255,8 @@ class Game {
         break;
       case EventType.QUEATTACK:
         if (this.gameState.queAttack(event.data)) {
+          this.uiState = UIMode.OpponentTurn;
+          this.ui.setMode(this.uiState);
           this.update(ConstructEvent(EventType.OUTGOINGATTACK, this.gameState.attackQueue));
         }
         break;
@@ -249,6 +274,13 @@ class Game {
       case EventType.INCOMINGATTACK:
         // this.animationPromise = this.animator.animate(event.data);
         // this.gameState.handleIncomingAttack(this.animationPromise, event.data);
+        (async () => {
+          await new Promise((res) => setTimeout(res, 2000));
+          this.ui.setMode(UIMode.InGame);
+        });
+        break;
+      case EventType.CHARACTER_DEATH:
+        console.log(`Bro died. (${event.data.name})`);
         break;
     }
   }
@@ -312,6 +344,24 @@ class NOPCommunicationsDriver {
   sendTurn(attacks: Attack[]): void {
     // this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, "RALRKJ"));
   }
+  // constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
+  //   const team: Character[] = [];
+  //   const spacing = Math.floor((ctxWidth / 2) / 4);
+  //
+  //   const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
+  //   const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
+  //   team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+  //
+  //   const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
+  //   const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
+  //   team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+  //
+  //   const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
+  //   const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
+  //   team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
+  //
+  //   return team;
+  // }
 
   constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
     const team: Character[] = [];
@@ -319,15 +369,15 @@ class NOPCommunicationsDriver {
     const offset = Math.floor((ctxWidth / 2));
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
-    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - necromancerSprite.size.y);
+    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
     team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id + "enemy"));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
-    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - witchSprite.size.y);
+    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
     team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id + "enemy"));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
-    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - knightSprite.size.y);
+    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
 
     return team;
@@ -439,7 +489,7 @@ const Characters = {
     start: new Vector(0, 80),
     size: new Vector(120, 80),
     offset: new Vector(0, 0),
-    boundingBox: { topl: new Vector(-19, 10), bottomr: new Vector(19, 40) },
+    boundingBox: { topl: new Vector(-19, -5), bottomr: new Vector(8, 40) },
     moves: [
       { name: "Slash", damage: 5, target: Target.EnemyTeam },
       { name: "Defend", damage: 0, target: Target.OwnTeam },
@@ -459,7 +509,7 @@ const Characters = {
     start: new Vector(32, 96),
     size: new Vector(32, 40),
     offset: new Vector(0, 0),
-    boundingBox: { topl: new Vector(-16, -20), bottomr: new Vector(16, 32) },
+    boundingBox: { topl: new Vector(-16, -20), bottomr: new Vector(16, 20) },
     moves: [
       { name: "Heal", damage: - 3, target: Target.OwnTeam },
       { name: "Arcane Burst", damage: 4, target: Target.EnemyTeam },
@@ -480,7 +530,7 @@ const Characters = {
     start: new Vector(0, 0),
     size: new Vector(160, 128),
     offset: new Vector(0, 0),
-    boundingBox: { topl: new Vector(-19, -10), bottomr: new Vector(19, 38) },
+    boundingBox: { topl: new Vector(-19, -5), bottomr: new Vector(19, 64) },
     moves: [
       { name: "Bone Shield", damage: 0, target: Target.OwnTeam },
       { name: "Dark Pulse", damage: 6, target: Target.EnemyTeam },
@@ -537,6 +587,7 @@ class Sprite {
   fps: number;
   lastFrameTime: number;
   frameDelay: number;
+  animating: boolean;
 
   constructor(
     path: string,
@@ -563,6 +614,7 @@ class Sprite {
     this.lastFrameTime = 0;
     this.fps = fps;
     this.frameDelay = 1000 / this.fps;
+    this.animating = canAnimate;
 
     if (canAnimate) {
       requestAnimationFrame(this.animate.bind(this));
@@ -579,26 +631,28 @@ class Sprite {
   }
 
   animate(timestamp: number) {
-    if (!this.lastFrameTime) this.lastFrameTime = timestamp; // init on first frame
+    if (this.animating) {
+      if (!this.lastFrameTime) this.lastFrameTime = timestamp; // init on first frame
 
-    const elapsed = timestamp - this.lastFrameTime;
+      const elapsed = timestamp - this.lastFrameTime;
 
-    if (elapsed >= this.frameDelay) {
-      this.lastFrameTime = timestamp;
+      if (elapsed >= this.frameDelay) {
+        this.lastFrameTime = timestamp;
 
-      this.frame = (this.frame + 1) % this.animations[this.currentAnimation].frames;
+        this.frame = (this.frame + 1) % this.animations[this.currentAnimation].frames;
 
-      const animationStart = this.animations[this.currentAnimation].start;
-      const animationOffset = this.animations[this.currentAnimation].offset;
+        const animationStart = this.animations[this.currentAnimation].start;
+        const animationOffset = this.animations[this.currentAnimation].offset;
 
-      this.start = AddVectors(
-        animationStart,
-        new Vector(animationOffset.x * this.frame, animationOffset.y * this.frame)
-      );
+        this.start = AddVectors(
+          animationStart,
+          new Vector(animationOffset.x * this.frame, animationOffset.y * this.frame)
+        );
 
+      }
+
+      requestAnimationFrame(this.animate.bind(this));
     }
-
-    requestAnimationFrame(this.animate.bind(this));
   }
 }
 
@@ -752,41 +806,9 @@ class DisplayDriver {
     this.gameState.team.forEach((character) => {
       const x = character.position.x;
       const y = character.position.y;
-
-      this.ctx.save();
-      // this.ctx.beginPath();
-      this.ctx.fillStyle = BackgroundColor.IvoryWhite;
-      this.ctx.arc(this.cX(x * this.scale), y * this.scale, 10, 0, 2 * Math.PI);
-      this.ctx.fill();
-      // this.ctx.strokeRect(
-      //   this.cX(this.scale * (x - Math.floor(character.sprite.boundingBox.x / 2))),
-      //   this.scale * (y - Math.floor(character.sprite.boundingBox.y / 2)),
-      //   character.sprite.boundingBox.x * this.scale,
-      //   character.sprite.boundingBox.y * this.scale
-      // );
-      this.ctx.restore();
-
-
       const sPos = new Vector(x, y);
       this.drawSprite(character.sprite, sPos);
-
-      const width = character.sprite.boundingBox.bottomr.x - character.sprite.boundingBox.topl.x
-      const height = character.sprite.boundingBox.bottomr.y - character.sprite.boundingBox.topl.y
-      this.ctx.save();
-      // this.ctx.beginPath();
-      this.ctx.fillStyle = BackgroundColor.IvoryWhite;
-      // this.ctx.arc(this.cX(x * this.scale), y * this.scale, 10, 0, 2 * Math.PI);
-      // this.ctx.fill();
-      this.ctx.strokeRect(
-        this.cX(this.scale * (x + character.sprite.boundingBox.topl.x)),
-        this.scale * (y + character.sprite.boundingBox.topl.y),
-        width * this.scale,
-        height * this.scale
-      );
-      this.ctx.restore();
-
-      this.drawSprite(character.sprite, sPos);
-      // this.drawHealth(character);
+      this.drawHealth(character);
     });
   }
 
@@ -816,75 +838,16 @@ class DisplayDriver {
       width,
       height,
     );
-
-    this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.fillStyle = BackgroundColor.IvoryWhite;
-    this.ctx.arc(this.cX(pos.x) * this.scale, this.cY(pos.y) * this.scale, 10, 0, 2 * Math.PI);
-    this.ctx.fill();
-    this.ctx.restore();
-
-    // this.ctx.strokeRect(x, y, width, height);
-    //
-    // const nx = this.cX(this.scale * (pos.x));
-    // const ny = this.cY(this.scale * (pos.y));
-    //
-    // this.ctx.strokeRect(x + (this.scale * sprite.boundingBox.x), y, sprite.boundingBox.x * this.scale, sprite.boundingBox.y * this.scale);
-
-    // this.ctx.save();
-    // this.ctx.beginPath();
-    // this.ctx.moveTo(nx, ny);
-    // this.ctx.lineTo(nx, ny + (this.scale * sprite.size.y));
-    // this.ctx.strokeStyle = 'blue';
-    // this.ctx.lineWidth = 3;
-    // this.ctx.stroke();
-    // this.ctx.restore();
-  }
-
-  drawHealth(character: Character) {
-    this.ctx.font = `${3 * this.scale}px "Press Start 2P"`;
-    const line = `HP: ${character.health}`;
-    const textMetrics = this.ctx.measureText(line);
-
-    const linewidth = textMetrics.width * 1.5;
-    const lineheight = Math.floor((textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent) * 2);
-
-    // const pos = new Vector(
-    //   Math.floor((character.sprite.size.x + character.position.x) / 2),
-    //   Math.floor((character.sprite.size.y + character.position.y) / 2),
-    // );
-
-    const pos = character.position;
-
-    const x = this.cX(pos.x * this.scale);
-    const y = this.cY(pos.y * this.scale);
-    const swidth = character.sprite.boundingBox.x * this.scale;
-    const sheight = character.sprite.boundingBox.y * this.scale;
-
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillRect(Math.floor(x - (linewidth / 2)), Math.floor(y - (lineheight / 2)), linewidth, lineheight);
-
-    this.ctx.fillStyle = BackgroundColor.IvoryWhite;
-    this.ctx.fillText(line, x, y);
-
-    this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.arc(x, y, 1, 0, 2 * Math.PI);
-    this.ctx.fill();
-    this.ctx.restore();
   }
 
   private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
-    const x = this.cX(pos.x * this.scale - Math.floor(sprite.size.x * this.scale / 2));
-    const y = this.cY(pos.y * this.scale);
+    const x = this.cX(this.scale * Math.floor((pos.x - sprite.size.x / 2)));
+    const y = this.cY(this.scale * Math.floor((pos.y - sprite.size.y / 2)));
     const width = sprite.size.x * this.scale;
     const height = sprite.size.y * this.scale;
-
     this.ctx.save();
-
     this.ctx.translate(x + width, y);
     this.ctx.scale(-1, 1);
-
     this.ctx.drawImage(
       sprite.image,
       sprite.start.x,
@@ -896,10 +859,30 @@ class DisplayDriver {
       width,
       height
     );
-
     this.ctx.restore();
-
   }
+
+  drawHealth(character: Character) {
+    this.ctx.font = `${3 * this.scale}px "Press Start 2P"`;
+    const line = `HP: ${character.health}`;
+    const textMetrics = this.ctx.measureText(line);
+
+    const linewidth = textMetrics.width * 1.5;
+    const lineheight = Math.floor((textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent) * 2);
+
+    const pos = character.position;
+
+    const width = (character.sprite.boundingBox.bottomr.x - character.sprite.boundingBox.topl.x);
+    const x = this.cX(this.scale * (character.sprite.boundingBox.topl.x + pos.x + Math.floor(width / 2)));
+    const y = this.cY(this.scale * (character.sprite.boundingBox.topl.y + pos.y));
+
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    this.ctx.fillRect(Math.floor(x - (linewidth / 2)), Math.floor(y - (lineheight / 2)), linewidth, lineheight);
+
+    this.ctx.fillStyle = BackgroundColor.IvoryWhite;
+    this.ctx.fillText(line, x, y);
+  }
+
 
   private drawUI(curScreen: UIElement) {
     this.drawPanel(curScreen as Panel);
@@ -1069,6 +1052,7 @@ enum UIMode {
   TitleScreen,
   Waiting,
   InGame,
+  OpponentTurn,
 }
 
 // damn never thought id ever use a closure but here we are
@@ -1242,6 +1226,29 @@ function constructGameScreen(ui: UI): void {
   ui.End();
 }
 
+function constructOpponentTurnScreen(ui: UI): void {
+  let pnlWidth = BASE_WIDTH * 0.7;
+  let pnlHeight = Characters.StageFloor.size.y;
+  let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
+  let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
+  let sidePnlWidth = BASE_WIDTH * 0.2;
+  let sidePnlHeight = Characters.StageFloor.size.y;
+  let sidex = BASE_HEIGHT * 0.05;
+  let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
+
+  ui.Begin(UIMode.OpponentTurn, "opponentTurn");
+
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
+  ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
+  ui.endPanel();
+
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, "characterScreen", x, y, pnlWidth, pnlHeight);
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "HAHA AUGGH POOPOO", "waitingModal");
+  ui.endPanel();
+
+  ui.End();
+}
+
 class RenderStack {
   stack: UIElement[];
 
@@ -1282,13 +1289,14 @@ class UI {
 
   private currentBuildMode: UIMode;
 
-  constructor(eventBus: EventBus, baseWidth: number, baseHeight: number) {
+  constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
     this.generateID = initIdGenerator();
     this.screens = {
       [UIMode.TitleScreen]: new RenderStack(),
       [UIMode.Waiting]: new RenderStack(),
       [UIMode.InGame]: new RenderStack(),
+      [UIMode.OpponentTurn]: new RenderStack(),
     };
     this.curMode = this.screens[UIMode.TitleScreen];
     this.currentBuildMode = UIMode.TitleScreen;
@@ -1316,8 +1324,8 @@ class UI {
   }
 
   public Begin(mode: UIMode, id: string | null = null): void {
-    this.screens[mode].push(new Panel(id ?? this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT, defaultOpts));
     this.currentBuildMode = mode;
+    this.screens[mode].push(new Panel(id ?? this.generateID(), 0, 0, BASE_WIDTH, BASE_HEIGHT, defaultOpts));
   }
 
   public beginMenu(id: string, name: string, opts: UIElementOpts): void {
@@ -1414,10 +1422,13 @@ class UI {
   }
 
   public End(): void {
+    console.log(this.screens[this.currentBuildMode]);
   }
 
   public setMode(mode: UIMode) {
+    console.log(`Mode was set to ${mode} `);
     this.curMode = this.screens[mode];
+    console.log(this.screens);
   }
 
   // i like this function
