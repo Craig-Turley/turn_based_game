@@ -65,6 +65,7 @@ type Attack = {
 
 class Character {
   public sprite: Sprite;
+  public originalPosition: Vector;
   public position: Vector;
   public health: number;
   public maxhealth: number;
@@ -75,6 +76,7 @@ class Character {
   constructor(sprite: Sprite, position: Vector, health: number, defense: number, attack: Move[], name: string) {
     this.sprite = sprite;
     this.position = position;
+    this.originalPosition = position;
     this.health = health;
     this.maxhealth = health;
     this.defense = defense;
@@ -287,27 +289,32 @@ class Game {
 }
 
 class Animator {
-  animations: { [key: string]: (data: Attack) => Promise<void> };
+  animations: { [key: string]: ((data: Attack) => Promise<void>)[] };
 
   constructor() {
     this.animations = {};
+    this.registerAnimation("Slash", animateKnightWalkTarget);
     this.registerAnimation("Slash", animateKnightSlash);
+    this.registerAnimation("Slash", animateKnightWalkBack);
   }
 
   animate(key: string, data: Attack): Promise<void> {
-    console.log(`Animating attack ${key}`);
     if (!(key in this.animations)) {
-      return new Promise((res) => {
-        setTimeout(() => {
-          res();
-        }, 2000);
-      })
+      return new Promise((res) => setTimeout(res, 2000));
     }
-    return this.animations[key](data);
+    return new Promise(async (res) => {
+      for (const animation of this.animations[key]) {
+        await animation(data);
+      }
+      res();
+    });
   }
 
   registerAnimation(key: string, animation: (data: Attack) => Promise<void>) {
-    this.animations[key] = animation;
+    if (!this.animations[key]) {
+      this.animations[key] = [];
+    }
+    this.animations[key].push(animation);
   }
 }
 
@@ -379,6 +386,8 @@ class NOPCommunicationsDriver {
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
     const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
     team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
+
+    team.forEach((t) => t.sprite.toggleMirror());
 
     return team;
   }
@@ -548,19 +557,21 @@ const Characters = {
   },
 };
 
-function animateKnightSlash(data: Attack): Promise<void> {
+function animateKnightWalkTarget(data: Attack): Promise<void> {
   const { character, attack, target } = data;
 
-  const frames = 15;
-  const distance = target.position.x - character.position.x - character.sprite.size.x / 2;
-  const offset = distance / frames;
+  const targetbbOffset = target.sprite.boundingBox.topl.x;
+  const characterbbOffset = character.sprite.boundingBox.bottomr.x;
+
+  const frames = 30;
+  const distance = (target.position.x + targetbbOffset - 25 - character.position.x + characterbbOffset);
+  const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
 
   return new Promise((res) => {
     const animate = (frame: number) => {
       if (frame >= frames) {
-        data.character.sprite.setAnimation("idle");
         res();
         return;
       }
@@ -572,6 +583,53 @@ function animateKnightSlash(data: Attack): Promise<void> {
     animate(0);
   });
 
+}
+
+function animateKnightSlash(data: Attack): Promise<void> {
+  const { character, attack, target } = data;
+  const frames = character.sprite.animations[attack.name].frames;
+
+  return new Promise((res) => {
+    character.sprite.setAnimation(attack.name);
+    const animate = () => {
+      const frame = character.sprite.frame;
+      if (frame + 1 >= frames) {
+        character.sprite.setAnimation("idle");
+        res();
+        return
+      }
+
+      requestAnimationFrame(() => { animate() });
+    };
+
+    animate();
+  });
+}
+
+function animateKnightWalkBack(data: Attack): Promise<void> {
+  const { character, attack, target } = data;
+
+  const distance = character.originalPosition.x - character.position.x;
+  const frames = 30;
+  const offset = Math.floor(distance / frames);
+
+  return new Promise((res) => {
+    character.sprite.toggleMirror();
+    character.sprite.setAnimation("run");
+    const animate = (frame: number) => {
+      if (frame >= frames) {
+        character.sprite.setAnimation("idle");
+        character.sprite.toggleMirror();
+        res();
+        return;
+      }
+
+      character.position.x += offset;
+      requestAnimationFrame(() => { animate(frame + 1) });
+    };
+
+    animate(0);
+  });
 }
 
 class Sprite {
@@ -588,6 +646,7 @@ class Sprite {
   lastFrameTime: number;
   frameDelay: number;
   animating: boolean;
+  mirrored: boolean;
 
   constructor(
     path: string,
@@ -598,7 +657,7 @@ class Sprite {
     animations: { [key: string]: SpriteAnimation },
     boundingBox: { topl: Vector, bottomr: Vector },
     canAnimate: boolean = false,
-    fps: number = 15
+    fps: number = 15,
   ) {
     const img = new Image();
     img.src = path;
@@ -615,6 +674,7 @@ class Sprite {
     this.fps = fps;
     this.frameDelay = 1000 / this.fps;
     this.animating = canAnimate;
+    this.mirrored = false;
 
     if (canAnimate) {
       requestAnimationFrame(this.animate.bind(this));
@@ -653,6 +713,10 @@ class Sprite {
 
       requestAnimationFrame(this.animate.bind(this));
     }
+  }
+
+  toggleMirror(): void {
+    this.mirrored = !this.mirrored;
   }
 }
 
@@ -817,27 +881,37 @@ class DisplayDriver {
       const x = character.position.x;
       const y = character.position.y;
       const sPos = new Vector(x, y);
-      this.drawMirroredSprite(character.sprite, sPos)
+      this.drawSprite(character.sprite, sPos);
       this.drawHealth(character);
     });
   }
 
   private drawSprite(sprite: Sprite, pos: Vector): void {
-    const x = this.cX(this.scale * Math.floor((pos.x - sprite.size.x / 2)));
-    const y = this.cY(this.scale * Math.floor((pos.y - sprite.size.y / 2)));
+    const x = this.cX(this.scale * Math.floor(pos.x - sprite.size.x / 2));
+    const y = this.cY(this.scale * Math.floor(pos.y - sprite.size.y / 2));
     const width = sprite.size.x * this.scale;
     const height = sprite.size.y * this.scale;
+
+    this.ctx.save();
+
+    if (sprite.mirrored) {
+      this.ctx.translate(x + width, y);
+      this.ctx.scale(-1, 1);
+    }
+
     this.ctx.drawImage(
       sprite.image,
       sprite.start.x,
       sprite.start.y,
       sprite.size.x,
       sprite.size.y,
-      x,
-      y,
+      sprite.mirrored ? 0 : x, // When mirrored, draw from (0,0)
+      sprite.mirrored ? 0 : y,
       width,
-      height,
+      height
     );
+
+    this.ctx.restore();
   }
 
   private drawMirroredSprite(sprite: Sprite, pos: Vector): void {
@@ -1211,7 +1285,9 @@ function constructGameScreen(ui: UI): void {
       ui.backButton({ ...defaultButtonOpts, backgroundColor: BackgroundColor.LightGrey });
 
       targetMap[attack.target].forEach((target) => {
-        ui.button({ ...defaultButtonOpts, backgroundColor: targetColorMap[attack.target] }, target.name, [ConstructEvent(EventType.QUEATTACK, { character: character, attack: attack, target: target }), ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen")]);
+        // dont change the order of these events. it matters
+        // what are you...a permutation?!?!
+        ui.button({ ...defaultButtonOpts, backgroundColor: targetColorMap[attack.target] }, target.name, [ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen"), ConstructEvent(EventType.QUEATTACK, { character: character, attack: attack, target: target })]);
       });
 
       ui.endPanel();
@@ -1239,11 +1315,11 @@ function constructOpponentTurnScreen(ui: UI): void {
   ui.Begin(UIMode.OpponentTurn, "opponentTurn");
 
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, borderColor: BorderColor.IvoryWhite }, null, sidex, sidey, sidePnlWidth, sidePnlHeight);
-  ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "Choose a character");
+  ui.modal({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.Black, textColor: BackgroundColor.IvoryWhite }, "");
   ui.endPanel();
 
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, "characterScreen", x, y, pnlWidth, pnlHeight);
-  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "HAHA AUGGH POOPOO", "waitingModal");
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, "Waiting for next turn...", "waitingModal");
   ui.endPanel();
 
   ui.End();
@@ -1422,13 +1498,10 @@ class UI {
   }
 
   public End(): void {
-    console.log(this.screens[this.currentBuildMode]);
   }
 
   public setMode(mode: UIMode) {
-    console.log(`Mode was set to ${mode} `);
     this.curMode = this.screens[mode];
-    console.log(this.screens);
   }
 
   // i like this function
