@@ -140,7 +140,6 @@ class GameState {
 
   async handleOutgoingAttack(animating: Promise<void> | null, data: Attack) {
     if (animating) {
-
       await animating;
     }
 
@@ -152,7 +151,8 @@ class GameState {
     }
 
     if (health <= 0) {
-      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
+      target.health = 0;
+      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, { character: target, team: Target.EnemyTeam }));
     }
   }
 
@@ -287,7 +287,18 @@ class Game {
         })();
         break;
       case EventType.CHARACTER_DEATH:
-        console.log(`Bro died. (${event.data.name})`);
+        this.animationPromise = this.animator.animateDeath(event.data.character, event.data.team);
+        (async () => {
+          await this.animationPromise;
+          console.log("done");
+        });
+        const team = event.data.team == Target.OwnTeam ? this.gameState.team : this.gameState.enemyTeam;
+        const newTeam = team.filter((character) => { return character.name != event.data.character.name });
+        if (event.data.team === Target.OwnTeam) {
+          this.gameState.team = newTeam;
+        } else {
+          this.gameState.enemyTeam = newTeam;
+        }
         break;
     }
   }
@@ -319,6 +330,27 @@ class Animator {
       }
       res();
     });
+  }
+
+  animateDeath(character: Character, team: Target): Promise<void> {
+    const frames = character.sprite.animations["death"].frames;
+
+    return new Promise((res) => {
+      character.sprite.setAnimation("death");
+      const frame = character.sprite.frame;
+      const animate = (frame: number) => {
+        console.log(frame);
+        if (frame + 1 >= frames) {
+          console.log("resolving"); 
+          res();
+          return
+        }
+
+        requestAnimationFrame(() => animate(frame + 1));
+      };
+
+      animate(frame);
+    })
   }
 
   registerAnimation(key: string, animation: (data: Attack, targetType: Target) => Promise<void>) {
@@ -532,7 +564,7 @@ const Characters = {
       ["idle"]: { start: new Vector(250, 0), size: new Vector(32, 40), frames: 6, offset: new Vector(0, 48) },
       ["damage"]: { start: new Vector(218, 0), size: new Vector(32, 40), frames: 3, offset: new Vector(0, 48) },
       ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 48) },
-      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 40) },
+      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 48) },
       ["Heal"]: { start: new Vector(106, 0), size: new Vector(48, 48), frames: 5, offset: new Vector(0, 48) },
       ["Arcane Burst"]: { start: new Vector(0, 0), size: new Vector(104, 40), frames: 9, offset: new Vector(0, 46) },
     },
@@ -746,6 +778,7 @@ function animateNecromancerDarkPulse(data: Attack, targetTeam: Target): Promise<
 
   return new Promise((res) => {
     character.sprite.setAnimation(attack.name);
+    target.sprite.setAnimation("damage");
     const animate = () => {
       const frame = character.sprite.frame;
       if (frame + 1 >= frames) {
