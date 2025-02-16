@@ -267,7 +267,7 @@ class Game {
       case EventType.OUTGOINGATTACK:
         (async () => {
           for (const attack of event.data) {
-            this.animationPromise = this.animator.animate(attack.attack.name, attack);
+            this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.EnemyTeam);
             await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
             this.animationPromise = null;
           }
@@ -278,7 +278,7 @@ class Game {
       case EventType.INCOMINGATTACK:
         (async () => {
           for (const attack of event.data) {
-            this.animationPromise = this.animator.animate(attack.attack.name, attack);
+            this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.OwnTeam);
             await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
             this.animationPromise = null;
           }
@@ -294,7 +294,7 @@ class Game {
 }
 
 class Animator {
-  animations: { [key: string]: ((data: Attack) => Promise<void>)[] };
+  animations: { [key: string]: ((data: Attack, target: Target) => Promise<void>)[] };
 
   constructor() {
     this.animations = {};
@@ -309,19 +309,19 @@ class Animator {
     this.registerAnimation("Shield", animateNecromancerBoneShield);
   }
 
-  animate(key: string, data: Attack): Promise<void> {
+  animate(key: string, data: Attack, target: Target): Promise<void> {
     if (!(key in this.animations)) {
       return new Promise((res) => setTimeout(res, 2000));
     }
     return new Promise(async (res) => {
       for (const animation of this.animations[key]) {
-        await animation(data);
+        await animation(data, target);
       }
       res();
     });
   }
 
-  registerAnimation(key: string, animation: (data: Attack) => Promise<void>) {
+  registerAnimation(key: string, animation: (data: Attack, targetType: Target) => Promise<void>) {
     if (!this.animations[key]) {
       this.animations[key] = [];
     }
@@ -561,14 +561,14 @@ const Characters = {
   },
 };
 
-function animateKnightWalkTarget(data: Attack): Promise<void> {
+function animateKnightWalkTarget(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
 
-  const targetbbOffset = target.sprite.boundingBox.topl.x;
-  const characterbbOffset = character.sprite.boundingBox.bottomr.x;
+  const targetbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
+  const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
 
   const frames = 30;
-  const distance = (target.position.x + targetbbOffset - 10 - character.position.x + characterbbOffset);
+  const distance = (target.position.x + targetbbOffset) - (character.position.x + characterbbOffset);
   const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
@@ -586,10 +586,9 @@ function animateKnightWalkTarget(data: Attack): Promise<void> {
 
     animate(0);
   });
-
 }
 
-function animateKnightSlash(data: Attack): Promise<void> {
+function animateKnightSlash(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
 
@@ -612,7 +611,7 @@ function animateKnightSlash(data: Attack): Promise<void> {
   });
 }
 
-function animateKnightWalkBack(data: Attack): Promise<void> {
+function animateKnightWalkBack(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
 
   const distance = character.originalPosition.x - character.position.x;
@@ -638,14 +637,14 @@ function animateKnightWalkBack(data: Attack): Promise<void> {
   });
 }
 
-function animateWitchWalkTarget(data: Attack): Promise<void> {
+function animateWitchWalkTarget(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
 
-  const targetbbOffset = target.sprite.boundingBox.topl.x;
-  const characterbbOffset = character.sprite.boundingBox.bottomr.x;
+  const targetbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
+  const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
 
   const frames = 30;
-  const distance = (target.position.x + targetbbOffset - 30 - character.position.x + characterbbOffset);
+  const distance = (target.position.x + targetbbOffset) - (character.position.x + characterbbOffset);
   const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
@@ -666,7 +665,7 @@ function animateWitchWalkTarget(data: Attack): Promise<void> {
 
 }
 
-function animateWitchArcaneBurst(data: Attack): Promise<void> {
+function animateWitchArcaneBurst(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
 
@@ -689,7 +688,7 @@ function animateWitchArcaneBurst(data: Attack): Promise<void> {
   });
 }
 
-function animateWitchHeal(data: Attack): Promise<void> {
+function animateWitchHeal(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
 
@@ -715,7 +714,7 @@ function animateWitchHeal(data: Attack): Promise<void> {
   });
 }
 
-function animateWitchWalkBack(data: Attack): Promise<void> {
+function animateWitchWalkBack(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
 
   const distance = character.originalPosition.x - character.position.x;
@@ -741,7 +740,7 @@ function animateWitchWalkBack(data: Attack): Promise<void> {
   });
 }
 
-function animateNecromancerDarkPulse(data: Attack): Promise<void> {
+function animateNecromancerDarkPulse(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
 
@@ -763,7 +762,7 @@ function animateNecromancerDarkPulse(data: Attack): Promise<void> {
   });
 }
 
-function animateNecromancerBoneShield(data: Attack): Promise<void> {
+function animateNecromancerBoneShield(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
 
