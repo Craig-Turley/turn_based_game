@@ -22,6 +22,8 @@ enum EventType {
   OUTGOINGATTACK,
   INCOMINGATTACK,
   CHARACTER_DEATH,
+  GAME_WIN,
+  GAME_LOSE,
 }
 
 enum UIState {
@@ -123,17 +125,28 @@ class GameState {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
+    // const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
+    // const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
+    // team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+    //
+    // const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
+    // const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
+    // team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+    //
+    // const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
+    // const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
+    // team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
     const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
-    team.push(new Character(necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+    team.push(new Character(necromancerSprite, necromancerPos, 1, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
-    team.push(new Character(witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+    team.push(new Character(witchSprite, witchPos, 1, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
-    team.push(new Character(knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
+    team.push(new Character(knightSprite, knightPos, 1, 3, Characters.Knight.moves, Characters.Knight.id));
 
     return team;
   }
@@ -281,24 +294,32 @@ class Game {
             this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.OwnTeam);
             await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
             this.animationPromise = null;
+            this.commsDriver.sendTurn(this.gameState.attackQueue);
+            this.gameState.flushQueue();
           }
-          this.commsDriver.sendTurn(this.gameState.attackQueue);
-          this.gameState.flushQueue();
         })();
         break;
       case EventType.CHARACTER_DEATH:
-        this.animationPromise = this.animator.animateDeath(event.data.character, event.data.team);
         (async () => {
+          this.animationPromise = this.animator.animateDeath(event.data.character, event.data.team);
           await this.animationPromise;
-          console.log("done");
-        });
-        const team = event.data.team == Target.OwnTeam ? this.gameState.team : this.gameState.enemyTeam;
-        const newTeam = team.filter((character) => { return character.name != event.data.character.name });
-        if (event.data.team === Target.OwnTeam) {
-          this.gameState.team = newTeam;
-        } else {
-          this.gameState.enemyTeam = newTeam;
-        }
+          this.animationPromise = null;
+          const team = event.data.team == Target.EnemyTeam ? this.gameState.team : this.gameState.enemyTeam;
+          const newTeam = team.filter((character) => character.name !== event.data.character.name );
+          if (newTeam.length == 0) {
+            const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN; 
+            this.update(ConstructEvent(gameResult, {})); 
+          }
+          event.data.team == Target.EnemyTeam ? this.gameState.team = newTeam : this.gameState.enemyTeam = newTeam;
+        })();
+        break;
+      case EventType.GAME_WIN:
+        constructNotifierModal(this.ui, UIMode.GameWin, "You Win!!!");
+        this.ui.setMode(UIMode.GameWin);
+        break;
+      case EventType.GAME_LOSE:
+        constructNotifierModal(this.ui, UIMode.GameWin, "You Lose :(");
+        this.ui.setMode(UIMode.GameLose);
         break;
     }
   }
@@ -332,26 +353,25 @@ class Animator {
     });
   }
 
-  animateDeath(character: Character, team: Target): Promise<void> {
+animateDeath(character: Character, team: Target): Promise<void> {
+  return new Promise((res) => {
+    character.sprite.setAnimation("death");
+
     const frames = character.sprite.animations["death"].frames;
+    
+    const checkAnimation = () => {
+      if (character.sprite.frame >= frames - 1) { 
+        console.log("resolving");
+        res();
+        return;
+      }
 
-    return new Promise((res) => {
-      character.sprite.setAnimation("death");
-      const frame = character.sprite.frame;
-      const animate = (frame: number) => {
-        console.log(frame);
-        if (frame + 1 >= frames) {
-          console.log("resolving"); 
-          res();
-          return
-        }
+      requestAnimationFrame(checkAnimation); 
+    };
 
-        requestAnimationFrame(() => animate(frame + 1));
-      };
-
-      animate(frame);
-    })
-  }
+    requestAnimationFrame(checkAnimation); 
+  });
+}
 
   registerAnimation(key: string, animation: (data: Attack, targetType: Target) => Promise<void>) {
     if (!this.animations[key]) {
@@ -397,9 +417,9 @@ class NOPCommunicationsDriver {
       const attack = character.attack[Math.floor(Math.random() * character.attack.length - 1) + 1];
       let target;
       if (attack.target == Target.OwnTeam) {
-        target = this.team[Math.floor(Math.random() * character.attack.length - 1) + 1];
+        target = this.team[Math.floor(Math.random() * character.attack.length)];
       } else {
-        target = this.enemyTeam[Math.floor(Math.random() * character.attack.length - 1) + 1];
+        target = this.enemyTeam[Math.floor(Math.random() * character.attack.length)];
       }
       data.push({ character, attack, target });
     });
@@ -564,7 +584,7 @@ const Characters = {
       ["idle"]: { start: new Vector(250, 0), size: new Vector(32, 40), frames: 6, offset: new Vector(0, 48) },
       ["damage"]: { start: new Vector(218, 0), size: new Vector(32, 40), frames: 3, offset: new Vector(0, 48) },
       ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 48) },
-      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 48) },
+      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 40) },
       ["Heal"]: { start: new Vector(106, 0), size: new Vector(48, 48), frames: 5, offset: new Vector(0, 48) },
       ["Arcane Burst"]: { start: new Vector(0, 0), size: new Vector(104, 40), frames: 9, offset: new Vector(0, 46) },
     },
@@ -600,7 +620,7 @@ function animateKnightWalkTarget(data: Attack, targetTeam: Target): Promise<void
   const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
 
   const frames = 30;
-  const distance = (target.position.x + targetbbOffset) - (character.position.x + characterbbOffset);
+  const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
   const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
@@ -1311,6 +1331,8 @@ enum UIMode {
   Waiting,
   InGame,
   OpponentTurn,
+  GameWin,
+  GameLose,
 }
 
 // damn never thought id ever use a closure but here we are
@@ -1486,6 +1508,21 @@ function constructGameScreen(ui: UI): void {
   ui.End();
 }
 
+function constructNotifierModal(ui: UI, mode: UIMode, text: string): void {
+  let pnlWidth = BASE_WIDTH * 0.5;
+  let pnlHeight = Math.floor(pnlWidth * 0.5);
+  let x = (BASE_WIDTH * 0.5) - (pnlWidth * 0.5);
+  let y = (BASE_HEIGHT * 0.5) - (pnlHeight * 0.5);
+
+  ui.Begin(mode);
+  
+  ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, "characterScreen", x, y, pnlWidth, pnlHeight);
+  ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, text, "waitingModal");
+  ui.endPanel();
+ 
+  ui.End();
+}
+
 function constructOpponentTurnScreen(ui: UI): void {
   let pnlWidth = BASE_WIDTH * 0.7;
   let pnlHeight = Characters.StageFloor.size.y;
@@ -1557,6 +1594,8 @@ class UI {
       [UIMode.Waiting]: new RenderStack(),
       [UIMode.InGame]: new RenderStack(),
       [UIMode.OpponentTurn]: new RenderStack(),
+      [UIMode.GameWin]: new RenderStack(),
+      [UIMode.GameLose]: new RenderStack(),
     };
     this.curMode = this.screens[UIMode.TitleScreen];
     this.currentBuildMode = UIMode.TitleScreen;
