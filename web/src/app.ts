@@ -280,9 +280,12 @@ class Game {
       case EventType.OUTGOINGATTACK:
         (async () => {
           for (const attack of event.data) {
-            this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.EnemyTeam);
-            await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
-            this.animationPromise = null;
+            // for when a character dies from another attack first
+            if (attack.target.health != 0) {
+              this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.EnemyTeam);
+              await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
+              this.animationPromise = null;
+            }
           }
           this.commsDriver.sendTurn(this.gameState.attackQueue);
           this.gameState.flushQueue();
@@ -291,12 +294,13 @@ class Game {
       case EventType.INCOMINGATTACK:
         (async () => {
           for (const attack of event.data) {
-            this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.OwnTeam);
-            await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
-            this.animationPromise = null;
-            this.commsDriver.sendTurn(this.gameState.attackQueue);
-            this.gameState.flushQueue();
+            if (attack.target.health != 0) {
+              this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.OwnTeam);
+              await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
+              this.animationPromise = null;
+            }
           }
+          this.commsDriver.sendTurn(this.gameState.attackQueue);
         })();
         break;
       case EventType.CHARACTER_DEATH:
@@ -305,21 +309,30 @@ class Game {
           await this.animationPromise;
           this.animationPromise = null;
           const team = event.data.team == Target.EnemyTeam ? this.gameState.team : this.gameState.enemyTeam;
-          const newTeam = team.filter((character) => character.name !== event.data.character.name );
+          const newTeam = team.filter((character) => character.name !== event.data.character.name);
+          console.log(newTeam.length);
           if (newTeam.length == 0) {
-            const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN; 
-            this.update(ConstructEvent(gameResult, {})); 
+            const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN;
+            this.update(ConstructEvent(gameResult, {}));
           }
-          event.data.team == Target.EnemyTeam ? this.gameState.team = newTeam : this.gameState.enemyTeam = newTeam;
+
+          if (event.data.team == Target.EnemyTeam) {
+            this.gameState.team = newTeam;
+          } else {
+            this.gameState.enemyTeam = newTeam;
+          }
         })();
         break;
       case EventType.GAME_WIN:
         constructNotifierModal(this.ui, UIMode.GameWin, "You Win!!!");
-        this.ui.setMode(UIMode.GameWin);
+        this.uiState = UIMode.GameWin;
+        this.ui.setMode(this.uiState);
         break;
       case EventType.GAME_LOSE:
-        constructNotifierModal(this.ui, UIMode.GameWin, "You Lose :(");
-        this.ui.setMode(UIMode.GameLose);
+        console.log("RAHHH");
+        constructNotifierModal(this.ui, UIMode.GameLose, "You Lose :(");
+        this.uiState = UIMode.GameLose;
+        this.ui.setMode(this.uiState);
         break;
     }
   }
@@ -353,25 +366,25 @@ class Animator {
     });
   }
 
-animateDeath(character: Character, team: Target): Promise<void> {
-  return new Promise((res) => {
-    character.sprite.setAnimation("death");
+  animateDeath(character: Character, team: Target): Promise<void> {
+    return new Promise((res) => {
+      character.sprite.setAnimation("death");
 
-    const frames = character.sprite.animations["death"].frames;
-    
-    const checkAnimation = () => {
-      if (character.sprite.frame >= frames - 1) { 
-        console.log("resolving");
-        res();
-        return;
-      }
+      const frames = character.sprite.animations["death"].frames;
 
-      requestAnimationFrame(checkAnimation); 
-    };
+      const checkAnimation = () => {
+        if (character.sprite.frame >= frames - 1) {
+          console.log("resolving");
+          res();
+          return;
+        }
 
-    requestAnimationFrame(checkAnimation); 
-  });
-}
+        requestAnimationFrame(checkAnimation);
+      };
+
+      requestAnimationFrame(checkAnimation);
+    });
+  }
 
   registerAnimation(key: string, animation: (data: Attack, targetType: Target) => Promise<void>) {
     if (!this.animations[key]) {
@@ -413,13 +426,14 @@ class NOPCommunicationsDriver {
 
   sendTurn(attacks: Attack[]): void {
     const data: Attack[] = [];
+
     this.team.forEach((character) => {
-      const attack = character.attack[Math.floor(Math.random() * character.attack.length - 1) + 1];
+      const attack = character.attack[Math.floor(Math.random() * character.attack.length)];
       let target;
       if (attack.target == Target.OwnTeam) {
-        target = this.team[Math.floor(Math.random() * character.attack.length)];
+        target = this.team[Math.floor(Math.random() * this.team.length)];
       } else {
-        target = this.enemyTeam[Math.floor(Math.random() * character.attack.length)];
+        target = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)];
       }
       data.push({ character, attack, target });
     });
@@ -584,7 +598,7 @@ const Characters = {
       ["idle"]: { start: new Vector(250, 0), size: new Vector(32, 40), frames: 6, offset: new Vector(0, 48) },
       ["damage"]: { start: new Vector(218, 0), size: new Vector(32, 40), frames: 3, offset: new Vector(0, 48) },
       ["run"]: { start: new Vector(186, 0), size: new Vector(32, 40), frames: 8, offset: new Vector(0, 48) },
-      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 40) },
+      ["death"]: { start: new Vector(154, 0), size: new Vector(32, 40), frames: 12, offset: new Vector(0, 48) },
       ["Heal"]: { start: new Vector(106, 0), size: new Vector(48, 48), frames: 5, offset: new Vector(0, 48) },
       ["Arcane Burst"]: { start: new Vector(0, 0), size: new Vector(104, 40), frames: 9, offset: new Vector(0, 46) },
     },
@@ -720,15 +734,20 @@ function animateWitchWalkTarget(data: Attack, targetTeam: Target): Promise<void>
 function animateWitchArcaneBurst(data: Attack, targetTeam: Target): Promise<void> {
   const { character, attack, target } = data;
   const frames = character.sprite.animations[attack.name].frames;
+  const prevAnimationWidth = character.sprite.animations[character.sprite.currentAnimation].size.x;
+  let rawOffset = Math.floor((character.sprite.animations[attack.name].size.x / 2) - (prevAnimationWidth / 2));
+  const offset = targetTeam == Target.EnemyTeam ? rawOffset : rawOffset * -1;
 
   return new Promise((res) => {
     character.sprite.setAnimation(attack.name);
     target.sprite.setAnimation("damage");
+    character.position.x += offset;
     const animate = () => {
       const frame = character.sprite.frame;
       if (frame + 1 >= frames) {
         character.sprite.setAnimation("idle");
         target.sprite.setAnimation("idle");
+        character.position.x -= offset;
         res();
         return
       }
@@ -736,7 +755,7 @@ function animateWitchArcaneBurst(data: Attack, targetTeam: Target): Promise<void
       requestAnimationFrame(() => { animate() });
     };
 
-    animate();
+    requestAnimationFrame(() => { animate() });
   });
 }
 
@@ -1510,17 +1529,18 @@ function constructGameScreen(ui: UI): void {
 
 function constructNotifierModal(ui: UI, mode: UIMode, text: string): void {
   let pnlWidth = BASE_WIDTH * 0.5;
-  let pnlHeight = Math.floor(pnlWidth * 0.5);
+  let pnlHeight = Math.floor(pnlWidth * 0.3);
   let x = (BASE_WIDTH * 0.5) - (pnlWidth * 0.5);
   let y = (BASE_HEIGHT * 0.5) - (pnlHeight * 0.5);
 
   ui.Begin(mode);
-  
+
   ui.beginPanel({ ...defaultOpts, alignment: Alignment.Horizontal, backgroundColor: BackgroundColor.IvoryWhite, borderColor: BorderColor.Black, borderWidth: BorderWidth.Med }, "characterScreen", x, y, pnlWidth, pnlHeight);
   ui.modal({ ...defaultOpts, textColor: BackgroundColor.Black }, text, "waitingModal");
   ui.endPanel();
- 
+
   ui.End();
+  console.log("Constructed");
 }
 
 function constructOpponentTurnScreen(ui: UI): void {
