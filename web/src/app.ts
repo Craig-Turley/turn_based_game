@@ -157,34 +157,28 @@ class GameState {
     return team;
   }
 
-  async handleOutgoingAttack(animating: Promise<void> | null, data: Attack) {
-    if (animating) {
-      await animating;
-    }
-
+  handleAttackResults(data: Attack) {
     const { attack, character, target } = data;
-    const health = clamp(target.health - attack.damage, 0, target.maxHealth());
-    target.health = health;
+    target.health = clamp(target.health - attack.damage, 0, character.maxHealth());
 
     if (target.health == 0) {
-      target.health = 0;
-      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, { character: target, team: Target.EnemyTeam }));
+      console.log(`Bro ${target.name}`);
+      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
     }
   }
 
-  async handleIncomingAttack(animating: Promise<void> | null, data: Attack) {
-    if (animating) {
-      await animating;
+  handleDeathResult(event: event) {
+    const team = event.data.team == Target.EnemyTeam ? this.team : this.enemyTeam;
+    const newTeam = team.filter((character) => character.name !== event.data.character.name);
+    if (newTeam.length == 0) {
+      const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN;
+      this.eventBus.send(ConstructEvent(gameResult, {}));
     }
 
-    const { attack, character, target } = data;
-    const health = clamp(target.health - attack.damage, 0, target.maxHealth());
-    
-    target.health = health;
-
-    if (target.health == 0) {
-      target.health = 0;
-      this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
+    if (event.data.team == Target.EnemyTeam) {
+      this.team = newTeam;
+    } else {
+      this.enemyTeam = newTeam;
     }
   }
 
@@ -280,50 +274,12 @@ class Game {
           this.update(ConstructEvent(EventType.OUTGOINGATTACK, this.gameState.attackQueue));
         }
         break;
-      case EventType.OUTGOINGATTACK:
-        (async () => {
-          for (const attack of event.data) {
-            // for when a character dies from another attack first
-            if (attack.target.health != 0) {
-              this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.EnemyTeam);
-              await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
-              this.animationPromise = null;
-            }
-          }
-          this.commsDriver.sendTurn(this.gameState.attackQueue);
-          this.gameState.flushQueue();
-        })();
-        break;
-      case EventType.INCOMINGATTACK:
-        (async () => {
-          for (const attack of event.data) {
-            if (attack.target.health != 0) {
-              this.animationPromise = this.animator.animate(attack.attack.name, attack, Target.OwnTeam);
-              await this.gameState.handleOutgoingAttack(this.animationPromise, attack);
-              this.animationPromise = null;
-            }
-          }
-          this.commsDriver.sendTurn(this.gameState.attackQueue);
-        })();
+      case EventType.OUTGOINGATTACK || EventType.INCOMINGATTACK:
+        this.handleAttack(event);
         break;
       case EventType.CHARACTER_DEATH:
-        (async () => {
-          this.animationPromise = this.animator.animateDeath(event.data.character, event.data.team);
-          await this.animationPromise;
-          this.animationPromise = null;
-          const team = event.data.team == Target.EnemyTeam ? this.gameState.team : this.gameState.enemyTeam;
-          const newTeam = team.filter((character) => character.name !== event.data.character.name);
-          if (newTeam.length == 0) {
-            const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN;
-            this.update(ConstructEvent(gameResult, {}));
-          }
-
-          if (event.data.team == Target.EnemyTeam) {
-            this.gameState.team = newTeam;
-          } else {
-            this.gameState.enemyTeam = newTeam;
-          }
-        })();
+        console.log(`Heres the update loop ${event.data.name}`);
+        this.handleDeath(event);
         break;
       case EventType.GAME_WIN:
         constructNotifierModal(this.ui, UIMode.GameWin, "You Win!!!");
@@ -336,6 +292,25 @@ class Game {
         this.ui.setMode(this.uiState);
         break;
     }
+  }
+
+  async handleAttack(event: event) {
+    for (const attack of event.data) {
+      // for when a character dies from another attack first
+      if (attack.target.health != 0) {
+        const team = event.event == EventType.OUTGOINGATTACK ? Target.EnemyTeam : Target.OwnTeam;
+        await this.animator.animate(attack.attack.name, attack, team);
+        this.gameState.handleAttackResults(attack);
+      }
+    }
+    this.commsDriver.sendTurn(this.gameState.attackQueue);
+    this.gameState.flushQueue();
+  }
+
+  async handleDeath(event: event) {
+    console.log(event.data.name);
+    await this.animator.animateDeath(event.data, event.data.team);
+    this.gameState.handleDeathResult(event);
   }
 }
 
@@ -355,19 +330,19 @@ class Animator {
     this.registerAnimation("Shield", animateNecromancerBoneShield);
   }
 
-  animate(key: string, data: Attack, target: Target): Promise<void> {
+  async animate(key: string, data: Attack, target: Target): Promise<void> {
     if (!(key in this.animations)) {
-      return new Promise((res) => setTimeout(res, 2000));
+      await new Promise((res) => setTimeout(res, 2000));
+      return;
     }
-    return new Promise(async (res) => {
-      for (const animation of this.animations[key]) {
-        await animation(data, target);
-      }
-      res();
-    });
+
+    for (const animation of this.animations[key]) {
+      await animation(data, target);
+    }
   }
 
-  animateDeath(character: Character, team: Target): Promise<void> {
+  async animateDeath(character: Character, team: Target): Promise<void> {
+    console.log(character);
     return new Promise((res) => {
       character.sprite.setAnimation("death");
 
