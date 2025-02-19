@@ -94,6 +94,7 @@ class Character {
 function clamp(x: number, min: number, max: number): number {
   if (x > max) { return max; }
   else if (x < min) { return min; }
+  console.log("Returning", x);
   return x;
 }
 
@@ -159,17 +160,16 @@ class GameState {
 
   handleAttackResults(data: Attack) {
     const { attack, character, target } = data;
-    target.health = clamp(target.health - attack.damage, 0, character.maxHealth());
+    target.health = clamp(target.health - attack.damage, 0, target.maxHealth());
 
     if (target.health == 0) {
-      console.log(`Bro ${target.name}`);
       this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, target));
     }
   }
 
   handleDeathResult(event: event) {
     const team = event.data.team == Target.EnemyTeam ? this.team : this.enemyTeam;
-    const newTeam = team.filter((character) => character.name !== event.data.character.name);
+    const newTeam = team.filter((character) => character.name !== event.data.name);
     if (newTeam.length == 0) {
       const gameResult = event.data.team == Target.EnemyTeam ? EventType.GAME_LOSE : EventType.GAME_WIN;
       this.eventBus.send(ConstructEvent(gameResult, {}));
@@ -274,11 +274,13 @@ class Game {
           this.update(ConstructEvent(EventType.OUTGOINGATTACK, this.gameState.attackQueue));
         }
         break;
-      case EventType.OUTGOINGATTACK || EventType.INCOMINGATTACK:
+      case EventType.INCOMINGATTACK:
+        console.log(event.data);
+      case EventType.OUTGOINGATTACK:
+        console.log(EventType.INCOMINGATTACK == event.event);
         this.handleAttack(event);
         break;
       case EventType.CHARACTER_DEATH:
-        console.log(`Heres the update loop ${event.data.name}`);
         this.handleDeath(event);
         break;
       case EventType.GAME_WIN:
@@ -303,13 +305,12 @@ class Game {
         this.gameState.handleAttackResults(attack);
       }
     }
-    this.commsDriver.sendTurn(this.gameState.attackQueue);
+    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(JSON.parse(JSON.stringify(this.gameState.attackQueue))); }
     this.gameState.flushQueue();
   }
 
   async handleDeath(event: event) {
-    console.log(event.data.name);
-    await this.animator.animateDeath(event.data, event.data.team);
+    await this.animator.animateDeath(event.data);
     this.gameState.handleDeathResult(event);
   }
 }
@@ -341,8 +342,7 @@ class Animator {
     }
   }
 
-  async animateDeath(character: Character, team: Target): Promise<void> {
-    console.log(character);
+  async animateDeath(character: Character): Promise<void> {
     return new Promise((res) => {
       character.sprite.setAnimation("death");
 
