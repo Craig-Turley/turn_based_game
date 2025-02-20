@@ -205,7 +205,6 @@ class Game {
   public gameState: GameState;
   public displayDriver: DisplayDriver;
   animator: Animator;
-  animationPromise: Promise<void> | null = null;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -299,6 +298,8 @@ class Game {
   }
 
   async handleAttack(event: event) {
+    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
+
     for (const attack of event.data) {
       // for when a character dies from another attack first
       if (attack.target.health != 0) {
@@ -308,14 +309,13 @@ class Game {
       }
     }
 
-    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
-
     this.gameState.flushQueue();
   }
 
-  async handleDeath(event: event) {
-    await this.animator.animateDeath(event.data);
-    this.gameState.handleDeathResult(event);
+  handleDeath(event: event) {
+    this.animator.animateDeath(event.data).then(() => {
+      this.gameState.handleDeathResult(event);
+    });
   }
 }
 
