@@ -94,7 +94,6 @@ class Character {
 function clamp(x: number, min: number, max: number): number {
   if (x > max) { return max; }
   else if (x < min) { return min; }
-  console.log("Returning", x);
   return x;
 }
 
@@ -193,8 +192,8 @@ class GameState {
 }
 
 interface CommunicationProtocolDriver {
-  sendTurn(attacks: Attack[]): void,
-  connect(): void,
+  sendTurn(attacks: Attack[]): Promise<void>,
+  connect(): Promise<void>,
 }
 
 class Game {
@@ -275,10 +274,13 @@ class Game {
         }
         break;
       case EventType.INCOMINGATTACK:
-        console.log(event.data);
+        this.handleAttack(event).then(() => {
+          this.uiState = UIMode.InGame;
+          this.ui.setMode(this.uiState);
+        });
+        break;
       case EventType.OUTGOINGATTACK:
-        console.log(EventType.INCOMINGATTACK == event.event);
-        this.handleAttack(event);
+        this.handleAttack(event)
         break;
       case EventType.CHARACTER_DEATH:
         this.handleDeath(event);
@@ -305,7 +307,9 @@ class Game {
         this.gameState.handleAttackResults(attack);
       }
     }
-    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(JSON.parse(JSON.stringify(this.gameState.attackQueue))); }
+
+    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
+
     this.gameState.flushQueue();
   }
 
@@ -378,9 +382,9 @@ class WebSocketDriver {
     this.eventBus = eventBus;
   }
 
-  connect() { }
+  connect(): Promise<void> { return new Promise((res) => res); }
 
-  sendTurn() { }
+  sendTurn(): Promise<void> { return new Promise((res) => res); }
 }
 
 class NOPCommunicationsDriver {
@@ -394,25 +398,31 @@ class NOPCommunicationsDriver {
     this.enemyTeam = this.eventBus.bus.gameState.team; // this is the users team
   }
 
-  connect() {
-    this.eventBus.send(ConstructEvent(EventType.CONNECT, this.team));
-    this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
+  connect(): Promise<void> {
+    return new Promise((res) => {
+      this.eventBus.send(ConstructEvent(EventType.CONNECT, this.team));
+      this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
+      res();
+    })
   }
 
-  sendTurn(attacks: Attack[]): void {
-    const data: Attack[] = [];
+  sendTurn(attacks: Attack[]): Promise<void> {
+    return new Promise((res) => {
+      const data: Attack[] = [];
 
-    this.team.forEach((character) => {
-      const attack = character.attack[Math.floor(Math.random() * character.attack.length)];
-      let target;
-      if (attack.target == Target.OwnTeam) {
-        target = this.team[Math.floor(Math.random() * this.team.length)];
-      } else {
-        target = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)];
-      }
-      data.push({ character, attack, target });
+      this.team.forEach((character) => {
+        const attack = character.attack[Math.floor(Math.random() * character.attack.length)];
+        let target;
+        if (attack.target == Target.OwnTeam) {
+          target = this.team[Math.floor(Math.random() * this.team.length)];
+        } else {
+          target = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)];
+        }
+        data.push({ character, attack, target });
+      });
+      this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, data));
+      res();
     });
-    this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, data));
   }
 
   constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
@@ -696,7 +706,7 @@ function animateWitchWalkTarget(data: Attack, targetTeam: Target): Promise<void>
   const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
 
   const frames = 30;
-  const distance = (target.position.x + targetbbOffset) - (character.position.x + characterbbOffset);
+  const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
   const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
