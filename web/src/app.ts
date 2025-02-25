@@ -73,6 +73,27 @@ type Attack = {
   attack: Move, // the attack their doing 
 }
 
+type AttackContext = {
+  character: Character,
+  target: Character,
+  team: Character[],
+  targetTeam: Character[],
+  attack: Move,
+}
+
+function getAttackContext(gameState: GameState, attackData: Attack): AttackContext {
+  const { characterId, targetId, teamId, targetTeamId, attack } = attackData;
+
+  const team = gameState.teamId === teamId ? gameState.team : gameState.enemyTeam;
+  const targetTeam = gameState.enemyTeamId === targetTeamId ? gameState.enemyTeam : gameState.team;
+  const character = team.find((c) => c.id === characterId);
+  if (!character) { throw new Error(`Character with ID ${characterId} not found in team ${teamId}`); }
+  const target = targetTeam.find((c) => c.id === targetId);
+  if (!target) { throw new Error(`Target character with ID ${targetId} not found in target team ${targetTeamId}`); }
+
+  return { team, targetTeam, character, target, attack };
+}
+
 class Character {
   id: number;
   sprite: Sprite;
@@ -137,22 +158,22 @@ class GameState {
   flushQueue(): void {
     this.attackQueue = [];
   }
-  //
+
   constructTeam(ctxWidth: number, ctxHeight: number): Character[] {
     const team: Character[] = [];
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
     const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
-    team.push(new Character(1, necromancerSprite, necromancerPos, 1, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
+    team.push(new Character(1, necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
     const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
-    team.push(new Character(2, witchSprite, witchPos, 1, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
+    team.push(new Character(2, witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
     const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
-    team.push(new Character(3, knightSprite, knightPos, 1, 3, Characters.Knight.moves, Characters.Knight.id));
+    team.push(new Character(3, knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
     return team;
   }
@@ -190,9 +211,7 @@ class GameState {
   // }
 
   handleAttackResults(data: Attack) {
-    const { targetId, targetTeamId, attack } = data;
-    const targetTeam = this.enemyTeamId === targetTeamId ? this.enemyTeam : this.team;
-    const target: Character | undefined = targetTeam.find((c) => c.id === targetId);
+    const { target, targetTeam, attack } = getAttackContext(this, data);
 
     if (target) {
       // already killed by another attack
@@ -346,9 +365,9 @@ class Game {
   }
 
   handleAttack(event: event) {
-    for (const attack of event.data) {
-      // for when a character dies from another attack first
-      this.gameState.handleAttackResults(attack);
+    for (const attackData of event.data) {
+      this.animator.animate(attackData);
+      this.gameState.handleAttackResults(attackData);
     }
 
     this.gameState.flushQueue();
@@ -362,7 +381,7 @@ class Game {
 
 class Animator {
   characters: Character[];
-  animations: { [key: string]: ((data: Attack, target: Target) => Promise<void>)[] };
+  animations: { [key: string]: ((data: AttackContext) => Promise<void>)[] };
 
   constructor(characters: Character[]) {
     this.characters = [...characters];
@@ -397,7 +416,14 @@ class Animator {
     }
   }
 
-  registerAnimation(key: string, animation: (data: Attack, targetType: Target) => Promise<void>) {
+  playAnimation(attackData: Attack): void {
+    const animations = this.animations[attackData.attack.name];
+    for (const animation of animations) {
+      animation(attackData);
+    }
+  }
+
+  registerAnimation(key: string, animation: (data: Attack) => Promise<void>) {
     if (!this.animations[key]) {
       this.animations[key] = [];
     }
@@ -674,8 +700,8 @@ const Characters = {
   },
 };
 
-function animateKnightWalkTarget(data: Attack, targetTeam: Target): Promise<void> {
-  const { character, attack, target } = data;
+function animateKnightWalkTarget(data: AttackContext): Promise<void> {
+  const { character, target, team } = data;
 
   const targetbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
   const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
