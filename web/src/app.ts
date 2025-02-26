@@ -96,6 +96,7 @@ function getAttackContext(gameState: GameState, attackData: Attack): AttackConte
 
 class Character {
   id: number;
+  teamId: TeamId;
   sprite: Sprite;
   originalPosition: Vector;
   position: Vector;
@@ -115,6 +116,11 @@ class Character {
     this.defense = defense;
     this.attack = attack;
     this.name = name;
+    this.teamId = TeamId.TeamOne; // just a default
+  }
+
+  setTeamId(teamId: TeamId) {
+    this.teamId = teamId;
   }
 
 }
@@ -292,10 +298,12 @@ class Game {
         this.uiState = UIMode.Waiting;
         this.ui.setMode(this.uiState);
         this.gameState.teamId = TeamId.TeamOne;
+        this.gameState.team.forEach((c) => c.setTeamId(TeamId.TeamOne));
         this.commsDriver = new WebSocketDriver(this.eventBus);
         break;
       case EventType.JOIN_ROOM:
         this.gameState.teamId = TeamId.TeamTwo;
+        this.gameState.team.forEach((c) => c.setTeamId(TeamId.TeamTwo));
         console.log("Join Room", this.gameState.teamId);
         break;
       case EventType.CONNECT:
@@ -313,6 +321,7 @@ class Game {
       case EventType.SINGLE_PLAYER:
         this.commsDriver = new NOPCommunicationsDriver(this.eventBus);
         this.gameState.teamId = TeamId.TeamOne;
+        this.gameState.team.forEach((c) => c.setTeamId(TeamId.TeamOne));
         this.commsDriver.connect().then(() => {
           this.eventBus.send(ConstructEvent(EventType.START_GAME, ""));
         });
@@ -416,14 +425,14 @@ class Animator {
     }
   }
 
-  playAnimation(attackData: Attack): void {
+  playAnimation(gameState: GameState, attackData: Attack): void {
     const animations = this.animations[attackData.attack.name];
     for (const animation of animations) {
-      animation(attackData);
+      animation(getAttackContext(gameState, attackData));
     }
   }
 
-  registerAnimation(key: string, animation: (data: Attack) => Promise<void>) {
+  registerAnimation(key: string, animation: (data: AttackContext) => Promise<void>) {
     if (!this.animations[key]) {
       this.animations[key] = [];
     }
@@ -703,8 +712,8 @@ const Characters = {
 function animateKnightWalkTarget(data: AttackContext): Promise<void> {
   const { character, target, team } = data;
 
-  const targetbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
-  const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
+  const targetbbOffset = target.position > character.position ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr;
+  const characterbbOffset = target.position < character.position ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.bottomr;
 
   const frames = 30;
   const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
