@@ -388,55 +388,76 @@ class Game {
   }
 }
 
-class Animator {
-  characters: Character[];
-  animations: { [key: string]: ((data: AttackContext) => Promise<void>)[] };
+function animateIdle(character: Character, step: number) {
+  const dt = step - character.sprite.lastFrameTime;
+  if (dt > character.sprite.frameDelay) {
+    character.sprite.lastFrameTime = step;
 
-  constructor(characters: Character[]) {
-    this.characters = [...characters];
-    this.animations = {};
-    this.registerAnimation("Slash", animateKnightWalkTarget);
-    this.registerAnimation("Slash", animateKnightSlash);
-    this.registerAnimation("Slash", animateKnightWalkBack);
-    this.registerAnimation("Arcane Burst", animateWitchWalkTarget);
-    this.registerAnimation("Arcane Burst", animateWitchArcaneBurst);
-    this.registerAnimation("Arcane Burst", animateWitchWalkBack);
-    this.registerAnimation("Heal", animateWitchHeal);
-    this.registerAnimation("Dark Pulse", animateNecromancerDarkPulse);
-    this.registerAnimation("Shield", animateNecromancerBoneShield);
+    const numFrames = character.sprite.animations[character.sprite.currentAnimation].frames;
+    const frame = (character.sprite.frame + 1) % numFrames;
+    const animationStart = character.sprite.animations[character.sprite.currentAnimation].start;
+    const animationOffset = character.sprite.animations[character.sprite.currentAnimation].offset;
+
+    character.sprite.frame = frame;
+    character.sprite.start = AddVectors(
+      animationStart,
+      new Vector(animationOffset.x * frame, animationOffset.y * frame)
+    );
+  }
+}
+class AnimationSequence {
+  currentCallBackIdx: number;
+  callbacks: ((attackContext: AttackContext, step: number) => boolean)[];
+  attackContext: AttackContext | null;
+
+  constructor(callbacks: ((attackContext: AttackContext,, step: number) => boolean)[]) {
+    this.currentCallBackIdx = 0;
+    this.callbacks = callbacks;
+    this.attackContext = null;
   }
 
   animate(step: number) {
-    for (const character of this.characters) {
-      const dt = step - character.sprite.lastFrameTime;
+    if (!this.attackContext) {
+      console.error("Error: attackContext is null.");
+      return;
+    }
 
-      if (dt > character.sprite.frameDelay) {
-        character.sprite.lastFrameTime = step;
-        const numFrames = character.sprite.animations[character.sprite.currentAnimation].frames;
-        const frame = (character.sprite.frame + 1) % numFrames;
-        const animationStart = character.sprite.animations[character.sprite.currentAnimation].start;
-        const animationOffset = character.sprite.animations[character.sprite.currentAnimation].offset;
-        character.sprite.frame = frame;
-        character.sprite.start = AddVectors(
-          animationStart,
-          new Vector(animationOffset.x * frame, animationOffset.y * frame)
-        );
+    if (this.callbacks[this.currentCallBackIdx](this.attackContext, step)) {
+      this.currentCallBackIdx++;
+      if (this.currentCallBackIdx === this.callbacks.length) {
+        console.log("Animation sequence complete.");
       }
     }
   }
+}
 
-  playAnimation(gameState: GameState, attackData: Attack): void {
-    const animations = this.animations[attackData.attack.name];
-    for (const animation of animations) {
-      animation(getAttackContext(gameState, attackData));
+
+type AnimationData = {
+  callback: (character: Character, step: number) => void;
+  frames: number;
+}
+
+class Animator {
+  characters: Map<Character, string>;
+  animations: { [key: string]: AnimationData }
+
+  constructor(characters: Character[]) {
+    this.characters = new Map<Character, string>;
+    characters.forEach((character) => this.characters.set(character, "idle"));
+
+    this.animations = {};
+    this.registerAnimation("idle", { callback: animateIdle, frames: 0 });
+  }
+
+  animate(step: number) {
+    for (const [character, animation] of this.characters.entries()) {
+      const animationFunc = this.animations[animation].callback;
+      animationFunc(character, step);
     }
   }
 
-  registerAnimation(key: string, animation: (data: AttackContext) => Promise<void>) {
-    if (!this.animations[key]) {
-      this.animations[key] = [];
-    }
-    this.animations[key].push(animation);
+  registerAnimation(key: string, animation: AnimationData) {
+    this.animations[key] = animation;
   }
 }
 
@@ -715,25 +736,12 @@ function animateKnightWalkTarget(data: AttackContext): Promise<void> {
   const targetbbOffset = target.position > character.position ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr;
   const characterbbOffset = target.position < character.position ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.bottomr;
 
-  const frames = 30;
-  const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
-  const offset = Math.floor(distance / frames);
+  // const frames = 30;
+  // const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
+  // const offset = Math.floor(distance / frames);
 
   character.sprite.setAnimation("run");
 
-  return new Promise((res) => {
-    const animate = (frame: number) => {
-      if (frame >= frames) {
-        res();
-        return;
-      }
-
-      data.character.position.x += offset;
-      requestAnimationFrame(() => animate(frame + 1));
-    };
-
-    animate(0);
-  });
 }
 
 function animateKnightSlash(data: Attack, targetTeam: Target): Promise<void> {
