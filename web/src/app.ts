@@ -22,6 +22,7 @@ enum EventType {
   OUTGOINGATTACK,
   INCOMINGATTACK,
   CHARACTER_DEATH,
+  ANIMATION_FINISH,
   GAME_WIN,
   GAME_LOSE,
 }
@@ -75,10 +76,10 @@ type Attack = {
 
 type AttackContext = {
   character: Character,
-  target: Character,
-  team: Character[],
-  targetTeam: Character[],
-  attack: Move,
+  target: Character | null,
+  team: Character[] | null,
+  targetTeam: Character[] | null,
+  attack: Move | null,
 }
 
 function getAttackContext(gameState: GameState, attackData: Attack): AttackContext {
@@ -139,6 +140,9 @@ class GameState {
   enemyTeamId: TeamId | null;
   attackQueue: Attack[];
   eventBus: EventBus;
+  results: Attack[] = [];
+  curResult: AttackContext | null = null;
+  curResultIdx: number | null = null;
 
   constructor(ctxWidth: number, ctxHeight: number, eventBus: EventBus) {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
@@ -170,15 +174,15 @@ class GameState {
     const spacing = Math.floor((ctxWidth / 2) / 4);
 
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
-    const necromancerPos = new Vector((spacing * 1), ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
+    const necromancerPos = new Vector((spacing * 1), ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
     team.push(new Character(1, necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
-    const witchPos = new Vector(spacing * 2, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
+    const witchPos = new Vector(spacing * 2, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
     team.push(new Character(2, witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
-    const knightPos = new Vector(spacing * 3, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
+    const knightPos = new Vector(spacing * 3, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
     team.push(new Character(3, knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id));
 
     return team;
@@ -216,10 +220,10 @@ class GameState {
   //   return team;
   // }
 
-  handleAttackResults(data: Attack) {
-    const { target, targetTeam, attack } = getAttackContext(this, data);
+  handleAttackResults(data: AttackContext) {
+    const { target, targetTeam, attack } = data;
 
-    if (target) {
+    if (target && attack && targetTeam) {
       // already killed by another attack
       if (target.health == 0) { return; }
       target.health = clamp(target.health - attack.damage, 0, target.maxHealth);
@@ -227,7 +231,7 @@ class GameState {
       if (target.health === 0) {
         this.eventBus.send(ConstructEvent(EventType.CHARACTER_DEATH, { character: target, team: targetTeam }));
       }
-    }
+    } else { console.error("getAttackContext returned null values") }
 
   }
 
@@ -253,6 +257,24 @@ class GameState {
     this.enemyTeam = enemyTeam;
     this.enemyTeamId = teamId;
   }
+
+  setResults(attacks: Attack[]) {
+    this.results = attacks;
+    this.curResultIdx = 0;
+    this.curResult = getAttackContext(this, this.results[this.curResultIdx]);
+    console.log(this.results);
+  }
+
+  getCurrentResult(): AttackContext {
+    return getAttackContext(this, this.results[this.curResultIdx!]);
+  }
+
+  // remember this one increments the internal array pointer 
+  getNextResult(): AttackContext | null {
+    this.curResultIdx! += 1;
+    if (this.curResultIdx == this.results.length) { return null; }
+    return getAttackContext(this, this.results[this.curResultIdx!]);
+  }
 }
 
 interface CommunicationProtocolDriver {
@@ -276,7 +298,7 @@ class Game {
     this.gameState = new GameState(BASE_WIDTH, BASE_HEIGHT, this.eventBus);
     this.ui = new UI(this.eventBus);
     this.displayDriver = new DisplayDriver(this.ctx, this.gameState, this.ui);
-    this.animator = new Animator(this.gameState.team);
+    this.animator = new Animator(this.eventBus, this.gameState.team);
     this.uiState = UIMode.TitleScreen;
 
     requestAnimationFrame(() => {
@@ -312,7 +334,7 @@ class Game {
         this.gameState.setEnemyTeam(event.data.team, event.data.teamId);
         constructGameScreen(this.ui);
         constructOpponentTurnScreen(this.ui);
-        this.animator.characters.push(...this.gameState.enemyTeam);
+        this.animator.addCharacters(this.gameState.enemyTeam);
         break;
       case EventType.START_GAME:
         this.uiState = UIMode.InGame;
@@ -355,8 +377,15 @@ class Game {
         this.ui.setMode(this.uiState);
         break;
       case EventType.OUTGOINGATTACK:
-        this.handleAttack(event);
+        this.gameState.setResults(event.data);
+        this.animator.sendResult(this.gameState.getCurrentResult());
         break;
+      case EventType.ANIMATION_FINISH:
+        this.gameState.handleAttackResults(this.gameState.getCurrentResult());
+        const nextResult = this.gameState.getNextResult();
+        if (!nextResult) {
+          console.log("End turn");
+        };
       case EventType.CHARACTER_DEATH:
         this.handleDeath(event);
         break;
@@ -374,13 +403,8 @@ class Game {
   }
 
   handleAttack(event: event) {
-    for (const attackData of event.data) {
-      this.animator.animate(attackData);
-      this.gameState.handleAttackResults(attackData);
-    }
-
     this.gameState.flushQueue();
-    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
+    // if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
   }
 
   handleDeath(event: event) {
@@ -388,7 +412,8 @@ class Game {
   }
 }
 
-function animateIdle(character: Character, step: number) {
+function animateIdle(context: AttackContext, step: number): boolean {
+  const character = context.character;
   const dt = step - character.sprite.lastFrameTime;
   if (dt > character.sprite.frameDelay) {
     character.sprite.lastFrameTime = step;
@@ -404,61 +429,84 @@ function animateIdle(character: Character, step: number) {
       new Vector(animationOffset.x * frame, animationOffset.y * frame)
     );
   }
-}
-class AnimationSequence {
-  currentCallBackIdx: number;
-  callbacks: ((attackContext: AttackContext, step: number) => boolean)[];
-  attackContext: AttackContext | null;
 
-  constructor(callbacks: ((attackContext: AttackContext,, step: number) => boolean)[]) {
-    this.currentCallBackIdx = 0;
-    this.callbacks = callbacks;
-    this.attackContext = null;
-  }
-
-  animate(step: number) {
-    if (!this.attackContext) {
-      console.error("Error: attackContext is null.");
-      return;
-    }
-
-    if (this.callbacks[this.currentCallBackIdx](this.attackContext, step)) {
-      this.currentCallBackIdx++;
-      if (this.currentCallBackIdx === this.callbacks.length) {
-        console.log("Animation sequence complete.");
-      }
-    }
-  }
+  return false;
 }
 
+type AnimationSequence = {
+  animations: AnimationData[];
+  animationsIdx: number;
+}
 
 type AnimationData = {
-  callback: (character: Character, step: number) => void;
+  callback: (context: AttackContext, step: number) => boolean;
   frames: number;
 }
 
-class Animator {
-  characters: Map<Character, string>;
-  animations: { [key: string]: AnimationData }
+type AnimatorInformation = {
+  name: string;
+  context: AttackContext | null;
+}
 
-  constructor(characters: Character[]) {
-    this.characters = new Map<Character, string>;
-    characters.forEach((character) => this.characters.set(character, "idle"));
+class Animator {
+  bus: EventBus;
+  characters: Map<Character, AnimatorInformation>;
+  animations: { [key: string]: AnimationSequence };
+
+  constructor(eventBus: EventBus, characters: Character[]) {
+    this.bus = eventBus;
+    this.characters = new Map<Character, AnimatorInformation>;
+    characters.forEach((character) => this.characters.set(character, { name: `${character.name}_idle`, context: { character: character, team: null, target: null, targetTeam: null, attack: null } }));
 
     this.animations = {};
-    this.registerAnimation("idle", { callback: animateIdle, frames: 0 });
+    characters.forEach((character) => {
+      // ill make a stupid type for this later. for now the big scary red letters will stay
+      const characterData = Characters[character.sprite.id];
+      this.registerAnimation(`${character.name}_idle`, {
+        animations: [{ callback: animateIdle, frames: characterData.animations.idle.frames }],
+        animationsIdx: 0,
+      });
+    });
+
+    this.registerAnimation("slash", {
+      animations: [{ callback: animateKnightWalkTarget, frames: Characters.Knight.animations.Slash.frames }],
+      animationsIdx: 0,
+    });
+  }
+
+  addCharacters(characters: Character[]): void {
+    characters.forEach((character) => this.characters.set(character, { name: `${character.name}_idle`, context: { character: character, team: null, target: null, targetTeam: null, attack: null } }));
   }
 
   animate(step: number) {
     for (const [character, animation] of this.characters.entries()) {
-      const animationFunc = this.animations[animation].callback;
-      animationFunc(character, step);
+      const sequence = this.animations[animation.name];
+      const animationData = sequence.animations[sequence.animationsIdx];
+      if (animation.context) {
+        if (animationData.callback(animation.context, step)) {
+          sequence.animationsIdx += 1;
+          if (sequence.animationsIdx == sequence.animations.length) {
+            // just reseting back to idle after evert animation may change idk
+            // send animation finish signal here
+            this.characters.set(character, { name: "idle", context: null });
+            this.bus.send(ConstructEvent(EventType.ANIMATION_FINISH, null));
+          }
+        }
+      }
     }
   }
 
-  registerAnimation(key: string, animation: AnimationData) {
+  registerAnimation(key: string, animation: AnimationSequence) {
     this.animations[key] = animation;
   }
+
+  sendResult(attack: AttackContext): void {
+    if (attack.attack) {
+      this.characters.set(attack.character, { name: attack.attack.name, context: attack });
+    }
+    console.log(this.characters.get(attack.character));
+  }
+
 }
 
 // RIP browsers dont support raw tcp connections 
@@ -527,27 +575,27 @@ class NOPCommunicationsDriver {
     const offset = Math.floor((ctxWidth / 2));
 
     // const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
-    // const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
+    // const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
     // team.push(new Character(1, necromancerSprite, necromancerPos, 20, 5, Characters.Necromancer.moves, Characters.Necromancer.id + "enemy"));
     //
     // const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
-    // const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
+    // const witchPos = new Vector(spacing * 2 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
     // team.push(new Character(2, witchSprite, witchPos, 17, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id + "enemy"));
     //
     // const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
-    // const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
+    // const knightPos = new Vector(spacing * 1 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
     // team.push(new Character(3, knightSprite, knightPos, 22, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
     const necromancerSprite = new Sprite(Characters.Necromancer.image, Characters.Necromancer.start, Characters.Necromancer.size, Characters.Necromancer.offset, Characters.Necromancer.id, Characters.Necromancer.animations, Characters.Necromancer.boundingBox, true, 15);
-    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
-    team.push(new Character(1, necromancerSprite, necromancerPos, 1, 5, Characters.Necromancer.moves, Characters.Necromancer.id + "enemy"));
+    const necromancerPos = new Vector(spacing * 3 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Necromancer.size.y / 2));
+    team.push(new Character(1, necromancerSprite, necromancerPos, 1, 5, Characters.Necromancer.moves, Characters.Necromancer.id));
 
     const witchSprite = new Sprite(Characters.BlueWitch.image, Characters.BlueWitch.start, Characters.BlueWitch.size, Characters.BlueWitch.offset, Characters.BlueWitch.id, Characters.BlueWitch.animations, Characters.BlueWitch.boundingBox, true, 10);
-    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
-    team.push(new Character(2, witchSprite, witchPos, 1, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id + "enemy"));
+    const witchPos = new Vector(spacing * 2 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.BlueWitch.size.y / 2));
+    team.push(new Character(2, witchSprite, witchPos, 1, 6, Characters.BlueWitch.moves, Characters.BlueWitch.id));
 
     const knightSprite = new Sprite(Characters.Knight.image, Characters.Knight.start, Characters.Knight.size, Characters.Knight.offset, Characters.Knight.id, Characters.Knight.animations, Characters.Knight.boundingBox, true, 5);
-    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - Characters.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
-    team.push(new Character(3, knightSprite, knightPos, 1, 3, Characters.Knight.moves, Characters.Knight.id + "enemy"));
+    const knightPos = new Vector(spacing * 1 + offset, ctxHeight - StageAssets.StageFloor.size.y - Math.floor(Characters.Knight.size.y / 2));
+    team.push(new Character(3, knightSprite, knightPos, 1, 3, Characters.Knight.moves, Characters.Knight.id));
     //
     team.forEach((t) => t.sprite.toggleMirror());
 
@@ -569,10 +617,10 @@ class Stage {
     './assets/jungle_asset_pack/parallax_background/plx-5.png',
   ];
 
-  public layers: CanvasImageSource[];
-  public floortile: Sprite;
-  public undergroundtile: Sprite;
-  public shading: Shading;
+  layers: CanvasImageSource[];
+  floortile: Sprite;
+  undergroundtile: Sprite;
+  shading: Shading;
 
   constructor() {
     const layers: CanvasImageSource[] = [];
@@ -581,8 +629,8 @@ class Stage {
       layers.push(img);
     });
     this.layers = layers;
-    this.floortile = new Sprite(Characters.StageFloor.image, Characters.StageFloor.start, Characters.StageFloor.size, Characters.StageFloor.offset, Characters.StageFloor.id, {}, Characters.StageFloor.boundingBox, false);
-    this.undergroundtile = new Sprite(Characters.Underground.image, Characters.Underground.start, Characters.Underground.size, Characters.Underground.offset, Characters.Underground.id, {}, Characters.StageFloor.boundingBox, false);
+    this.floortile = new Sprite(StageAssets.StageFloor.image, StageAssets.StageFloor.start, StageAssets.StageFloor.size, StageAssets.StageFloor.offset, StageAssets.StageFloor.id, {}, StageAssets.StageFloor.boundingBox, false);
+    this.undergroundtile = new Sprite(StageAssets.Underground.image, StageAssets.Underground.start, StageAssets.Underground.size, StageAssets.Underground.offset, StageAssets.Underground.id, {}, StageAssets.StageFloor.boundingBox, false);
     this.shading = Shading.SHADE;
   }
 
@@ -625,9 +673,9 @@ class Vector {
 
 enum SpriteID {
   Knight = "Knight",
-  BlueWitch = "Blue Witch",
+  BlueWitch = "BlueWitch",
   Necromancer = "Necromancer",
-  StageFloor = "Stage Floor",
+  StageFloor = "StageFloor",
   Underground = "Underground",
 }
 
@@ -649,7 +697,7 @@ type SpriteAnimation = {
   offset: Vector
 }
 
-const Characters = {
+const StageAssets = {
   StageFloor: {
     image: "./assets/platforms/tiles/tile_0003.png",
     start: new Vector(0, 0),
@@ -657,6 +705,8 @@ const Characters = {
     offset: new Vector(0, 0),
     boundingBox: { topl: new Vector(21, 21), bottomr: new Vector(- 10, - 10) },
     id: SpriteID.StageFloor,
+    name: "Stage Floor",
+    animations: {},
   },
   Underground: {
     image: "./assets/platforms/tiles/tile_0032.png",
@@ -665,7 +715,12 @@ const Characters = {
     offset: new Vector(0, 0),
     boundingBox: new Vector(21, 21),
     id: SpriteID.Underground,
+    name: "Underground",
+    animations: {},
   },
+}
+
+const Characters = {
   Knight: {
     image: "./assets/knight/knight_sprite_sheet.png",
     start: new Vector(0, 80),
@@ -730,7 +785,7 @@ const Characters = {
   },
 };
 
-function animateKnightWalkTarget(data: AttackContext): Promise<void> {
+function animateKnightWalkTarget(data: AttackContext, step: number): boolean {
   const { character, target, team } = data;
 
   const targetbbOffset = target.position > character.position ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr;
@@ -1005,17 +1060,17 @@ class Sprite {
 }
 
 class DisplayDriver {
-  private ctx: CanvasRenderingContext2D;
-  private ui: UI;
-  private ctxWidth: number;
-  private ctxHeight: number;
-  private xOffset: number;
-  private yOffset: number;
-  private stage: Stage;
-  private gameState: GameState;
-  public baseWidth: number;
-  public baseHeight: number;
-  public scale: number;
+  ctx: CanvasRenderingContext2D;
+  ui: UI;
+  ctxWidth: number;
+  ctxHeight: number;
+  xOffset: number;
+  yOffset: number;
+  stage: Stage;
+  gameState: GameState;
+  baseWidth: number;
+  baseHeight: number;
+  scale: number;
 
   constructor(ctx: CanvasRenderingContext2D, gameState: GameState, ui: UI) {
     this.ctx = ctx;
@@ -1477,7 +1532,7 @@ function constructMainScreen(ui: UI): void {
 
 function constructWaitingScreen(ui: UI): void {
   const pnlWidth = BASE_WIDTH * 0.6;
-  const pnlHeight = Characters.StageFloor.size.y;
+  const pnlHeight = StageAssets.StageFloor.size.y;
   const pnlX = Math.floor((BASE_WIDTH / 2) - (pnlWidth / 2));
   const pnlY = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
 
@@ -1499,11 +1554,11 @@ function constructWaitingScreen(ui: UI): void {
 
 function constructGameScreen(ui: UI): void {
   let pnlWidth = BASE_WIDTH * 0.7;
-  let pnlHeight = Characters.StageFloor.size.y;
+  let pnlHeight = StageAssets.StageFloor.size.y;
   let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
   let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
   let sidePnlWidth = BASE_WIDTH * 0.2;
-  let sidePnlHeight = Characters.StageFloor.size.y;
+  let sidePnlHeight = StageAssets.StageFloor.size.y;
   let sidex = BASE_HEIGHT * 0.05;
   let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
 
@@ -1586,11 +1641,11 @@ function constructNotifierModal(ui: UI, mode: UIMode, text: string): void {
 
 function constructOpponentTurnScreen(ui: UI): void {
   let pnlWidth = BASE_WIDTH * 0.7;
-  let pnlHeight = Characters.StageFloor.size.y;
+  let pnlHeight = StageAssets.StageFloor.size.y;
   let x = Math.floor((BASE_WIDTH) - (pnlWidth + (BASE_WIDTH * 0.05)));
   let y = Math.floor((BASE_HEIGHT) - (pnlHeight - 3));
   let sidePnlWidth = BASE_WIDTH * 0.2;
-  let sidePnlHeight = Characters.StageFloor.size.y;
+  let sidePnlHeight = StageAssets.StageFloor.size.y;
   let sidex = BASE_HEIGHT * 0.05;
   let sidey = Math.floor((BASE_HEIGHT) - (sidePnlHeight - 3));
 
