@@ -69,7 +69,7 @@ type Move = {
 type Attack = {
   characterId: CharacterId, // character attacking 
   targetId: CharacterId, // the reciever of the attack
-  characterTeamId: TeamId,
+  teamId: TeamId,
   targetTeamId: TeamId,
   attack: Move, // the attack their doing 
 }
@@ -80,21 +80,19 @@ type AttackContext = {
   team: Character[] | null,
   targetTeam: Character[] | null,
   attack: Move | null,
-  teamId: TeamId | null,
 }
 
 function getAttackContext(gameState: GameState, attackData: Attack): AttackContext {
-  const { characterId, targetId, characterTeamId, targetTeamId, attack } = attackData;
+  const { characterId, targetId, teamId, targetTeamId, attack } = attackData;
 
-  const team = gameState.teamId === characterTeamId ? gameState.team : gameState.enemyTeam;
+  const team = gameState.teamId === teamId ? gameState.team : gameState.enemyTeam;
   const targetTeam = gameState.enemyTeamId === targetTeamId ? gameState.enemyTeam : gameState.team;
   const character = team.find((c) => c.id === characterId);
-  if (!character) { throw new Error(`Character with ID ${characterId} not found in team ${characterTeamId}`); }
+  if (!character) { throw new Error(`Character with ID ${characterId} not found in team ${teamId}`); }
   const target = targetTeam.find((c) => c.id === targetId);
   if (!target) { throw new Error(`Target character with ID ${targetId} not found in target team ${targetTeamId}`); }
-  const teamId = gameState.teamId;
 
-  return { team, targetTeam, character, target, attack, teamId };
+  return { team, targetTeam, character, target, attack };
 }
 
 class Character {
@@ -382,14 +380,11 @@ class Game {
         this.animator.sendResult(this.gameState.getCurrentResult());
         break;
       case EventType.ANIMATION_FINISH:
-        // this.gameState.handleAttackResults(this.gameState.getCurrentResult());
+        this.gameState.handleAttackResults(this.gameState.getCurrentResult());
         const nextResult = this.gameState.getNextResult();
         if (!nextResult) {
           console.log("End turn");
-          break;
         };
-        this.animator.sendResult(nextResult!);
-        break;
       case EventType.CHARACTER_DEATH:
         this.handleDeath(event);
         break;
@@ -446,8 +441,6 @@ type AnimationData = {
   callback: (context: AttackContext, step: number, frame: number) => boolean;
   frames: number;
   curFrame: number;
-  frameDelay: number;
-  lastStep: number | null;
 }
 
 type AnimatorInformation = {
@@ -459,6 +452,7 @@ class Animator {
   bus: EventBus;
   characters: Map<Character, AnimatorInformation | null>;
   animations: { [key: string]: AnimationSequence };
+  lastFrameTime: number = 0;
 
   constructor(eventBus: EventBus, characters: Character[]) {
     this.bus = eventBus;
@@ -468,39 +462,9 @@ class Animator {
 
     this.registerAnimation("Slash", {
       animations: [
-        { callback: animateKnightWalkTarget, frames: 30, curFrame: 30, frameDelay: 1000 / 60, lastStep: null },
-        { callback: animateKnightSlash, frames: Characters.Knight.animations["Slash"].frames, curFrame: Characters.Knight.animations.Slash.frames, frameDelay: 1000 / Characters.Knight.animations.Slash.frames, lastStep: null },
-        { callback: animateKnightWalkBack, frames: 30, curFrame: 30, frameDelay: 1000 / 60, lastStep: null }
-      ],
-      animationsIdx: 0,
-    });
-
-    this.registerAnimation("Arcane Burst", {
-      animations: [
-        { callback: animateWitchWalkTarget, frames: 30, curFrame: 30, frameDelay: 1000 / 60, lastStep: null },
-        { callback: animateWitchArcaneBurst, frames: Characters.BlueWitch.animations["Arcane Burst"].frames, curFrame: Characters.BlueWitch.animations["Arcane Burst"].frames, frameDelay: 1000 / Characters.BlueWitch.animations["Arcane Burst"].frames, lastStep: null },
-        { callback: animateWitchWalkBack, frames: 30, curFrame: 30, frameDelay: 1000 / 60, lastStep: null }
-      ],
-      animationsIdx: 0,
-    });
-
-    this.registerAnimation("Heal", {
-      animations: [
-        { callback: animateWitchHeal, frames: Characters.BlueWitch.animations["Heal"].frames, curFrame: Characters.BlueWitch.animations["Heal"].frames, frameDelay: 1000 / Characters.BlueWitch.animations["Heal"].frames, lastStep: null },
-      ],
-      animationsIdx: 0,
-    });
-
-    this.registerAnimation("Dark Pulse", {
-      animations: [
-        { callback: animateNecromancerDarkPulse, frames: Characters.Necromancer.animations["Dark Pulse"].frames, curFrame: Characters.Necromancer.animations["Dark Pulse"].frames, frameDelay: 1000 / Characters.Necromancer.animations["Dark Pulse"].frames, lastStep: null },
-      ],
-      animationsIdx: 0,
-    });
-
-    this.registerAnimation("Shield", {
-      animations: [
-        { callback: animateNecromancerBoneShield, frames: Characters.Necromancer.animations["Shield"].frames, curFrame: Characters.Necromancer.animations["Shield"].frames, frameDelay: 1000 / Characters.Necromancer.animations["Shield"].frames, lastStep: null },
+        // { callback: animateKnightWalkTarget, frames: 30, curFrame: 30 },
+        { callback: animateKnightSlash, frames: Characters.Knight.animations.Slash.frames, curFrame: Characters.Knight.animations.Slash.frames },
+        // { callback: animateKnightWalkBack, frames: 30, curFrame: 30 }
       ],
       animationsIdx: 0,
     });
@@ -515,6 +479,7 @@ class Animator {
     if (dt > character.sprite.frameDelay) {
       character.sprite.lastFrameTime = step;
 
+      console.log(character.sprite.currentAnimation);
       const numFrames = character.sprite.animations[character.sprite.currentAnimation].frames;
       const frame = (character.sprite.frame + 1) % numFrames;
       const animationStart = character.sprite.animations[character.sprite.currentAnimation].start;
@@ -530,18 +495,7 @@ class Animator {
 
   animateSequence(character: Character, animation: AnimatorInformation, step: number) {
     const sequence = this.animations[animation.name];
-    if (!sequence) {
-      this.characters.set(character, null);
-      character.sprite.setAnimation("idle");
-      this.characters.set(character, null);
-      this.bus.send(ConstructEvent(EventType.ANIMATION_FINISH, {}))
-      return;
-    }
     const animationData = sequence.animations[sequence.animationsIdx];
-    if (!animationData.lastStep) { animationData.lastStep = step };
-    const dt = step - animationData.lastStep;
-    if (dt < animationData.frameDelay) { return; }
-    animationData.lastStep = step;
     if (animation.context) {
       if (animationData.callback(animation.context, step, animationData.curFrame)) {
         animationData.curFrame = animationData.frames;
@@ -551,13 +505,14 @@ class Animator {
           // send animation finish signal here
           character.sprite.setAnimation("idle");
           this.characters.set(character, null);
-          this.bus.send(ConstructEvent(EventType.ANIMATION_FINISH, {}))
         }
       } else { animationData.curFrame--; }
     }
   }
 
   animate(step: number) {
+    const dt = step - character.sprite.lastFrameTime;
+    if (dt < character.sprite.frameDelay) { return; }
     for (const [character, animation] of this.characters.entries()) {
       // moves the sprite frame forward for its current animation 
       this.animateSprite(character, step);
@@ -626,7 +581,7 @@ class NOPCommunicationsDriver {
           } else {
             targetId = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)].id;
           }
-          data.push({ characterId: character.id, targetId: targetId, characterTeamId: this.teamId, targetTeamId: attack.target === Target.OwnTeam ? this.teamId : TeamId.TeamOne, attack: attack });
+          data.push({ characterId: character.id, targetId: targetId, teamId: this.teamId, targetTeamId: attack.target === Target.OwnTeam ? this.teamId : TeamId.TeamOne, attack: attack });
         }
       });
 
@@ -858,7 +813,7 @@ const Characters = {
 function animateKnightWalkTarget(data: AttackContext, step: number, frame: number): boolean {
   if (frame == 0) { return true; }
 
-  const { character, target, teamId } = data;
+  const { character, target } = data;
 
   if (!target) {
     console.error("null target returned from getAttackContext");
@@ -866,8 +821,8 @@ function animateKnightWalkTarget(data: AttackContext, step: number, frame: numbe
   }
 
   if (character.sprite.currentAnimation != "run") { character.sprite.setAnimation("run"); }
-  const targetbbOffset = teamId === character.teamId ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
-  const characterbbOffset = teamId === character.teamId ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.bottomr.x;
+  const targetbbOffset = target.position > character.position ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
+  const characterbbOffset = target.position < character.position ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.bottomr.x;
 
   const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
   const offset = Math.floor(distance / frame);
@@ -903,86 +858,156 @@ function animateKnightWalkBack(data: AttackContext, step: number, frame: number)
   return false;
 }
 
-function animateWitchWalkTarget(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
+function animateWitchWalkTarget(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
 
-  const { character, target } = data;
+  const targetbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
+  const characterbbOffset = targetTeam == Target.EnemyTeam ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.topl.x;
 
-  if (!target) {
-    console.error("null target returned from getAttackContext");
-    return true;
-  }
-
-  if (character.sprite.currentAnimation != "run") { character.sprite.setAnimation("run"); }
-
-  const targetbbOffset = target.position > character.position ? target.sprite.boundingBox.topl.x : target.sprite.boundingBox.bottomr.x;
-  const characterbbOffset = target.position < character.position ? target.sprite.boundingBox.bottomr.x : target.sprite.boundingBox.bottomr.x;
-
+  const frames = 30;
   const distance = (target.position.x + targetbbOffset + 8) - (character.position.x + characterbbOffset);
-  const offset = Math.floor(distance / frame);
+  const offset = Math.floor(distance / frames);
 
-  character.position.x += offset;
+  character.sprite.setAnimation("run");
 
-  return false;
+  return new Promise((res) => {
+    const animate = (frame: number) => {
+      if (frame >= frames) {
+        res();
+        return;
+      }
+
+      data.character.position.x += offset;
+      requestAnimationFrame(() => animate(frame + 1));
+    };
+
+    animate(0);
+  });
+
 }
 
-function animateWitchArcaneBurst(data: AttackContext, step: number, frame: number): boolean {
-  const { character, attack, teamId } = data;
+function animateWitchArcaneBurst(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
+  const frames = character.sprite.animations[attack.name].frames;
   const prevAnimationWidth = character.sprite.animations[character.sprite.currentAnimation].size.x;
-  let rawOffset = Math.floor((character.sprite.animations[attack!.name].size.x / 2) - (prevAnimationWidth / 2));
-  const offset = teamId == character.teamId ? rawOffset : rawOffset * -1;
+  let rawOffset = Math.floor((character.sprite.animations[attack.name].size.x / 2) - (prevAnimationWidth / 2));
+  const offset = targetTeam == Target.EnemyTeam ? rawOffset : rawOffset * -1;
 
-  if (frame == 0) {
-    character.position.x -= offset;
-    return true;
-  }
-
-  if (character.sprite.currentAnimation != attack!.name) {
+  return new Promise((res) => {
+    character.sprite.setAnimation(attack.name);
+    target.sprite.setAnimation("damage");
     character.position.x += offset;
-    character.sprite.setAnimation(attack!.name);
-  }
+    const animate = () => {
+      const frame = character.sprite.frame;
+      if (frame + 1 >= frames) {
+        character.sprite.setAnimation("idle");
+        target.sprite.setAnimation("idle");
+        character.position.x -= offset;
+        res();
+        return
+      }
 
-  return false
+      requestAnimationFrame(() => { animate() });
+    };
+
+    requestAnimationFrame(() => { animate() });
+  });
 }
 
-function animateWitchHeal(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
-  const { character, attack } = data;
-  if (character.sprite.currentAnimation != attack!.name) { character.sprite.setAnimation(attack!.name); }
-  return false;
+function animateWitchHeal(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
+  const frames = character.sprite.animations[attack.name].frames;
+
+  return new Promise((res) => {
+    character.sprite.setAnimation(attack.name);
+    const cycles = 10;
+    let cnt = 0;
+    const animate = () => {
+      const frame = character.sprite.frame;
+      if (frame + 1 >= frames) {
+        cnt++;
+        if (cnt == cycles) {
+          character.sprite.setAnimation("idle");
+          res();
+          return
+        }
+      }
+
+      requestAnimationFrame(() => { animate() });
+    };
+
+    animate();
+  });
 }
 
-function animateWitchWalkBack(data: AttackContext, step: number, frame: number): boolean {
-  const { character } = data;
-  if (frame == 0) {
-    character.sprite.toggleMirror();
-    return true;
-  }
+function animateWitchWalkBack(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
 
   const distance = character.originalPosition.x - character.position.x;
-  const offset = Math.floor(distance / frame);
+  const frames = 30;
+  const offset = Math.floor(distance / frames);
 
-  if (character.sprite.currentAnimation != "run") {
+  return new Promise((res) => {
     character.sprite.toggleMirror();
     character.sprite.setAnimation("run");
-  }
+    const animate = (frame: number) => {
+      if (frame >= frames) {
+        character.sprite.setAnimation("idle");
+        character.sprite.toggleMirror();
+        res();
+        return;
+      }
 
-  character.position.x += offset;
-  return false;
+      character.position.x += offset;
+      requestAnimationFrame(() => { animate(frame + 1) });
+    };
+
+    animate(0);
+  });
 }
 
-function animateNecromancerDarkPulse(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
-  const { attack, character } = data;
-  if (character.sprite.currentAnimation != attack!.name) { character.sprite.setAnimation(attack!.name); }
-  return false;
+function animateNecromancerDarkPulse(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
+  const frames = character.sprite.animations[attack.name].frames;
+
+  return new Promise((res) => {
+    character.sprite.setAnimation(attack.name);
+    target.sprite.setAnimation("damage");
+    const animate = () => {
+      const frame = character.sprite.frame;
+      if (frame + 1 >= frames) {
+        character.sprite.setAnimation("idle");
+        target.sprite.setAnimation("idle");
+        res();
+        return
+      }
+
+      requestAnimationFrame(() => { animate() });
+    };
+
+    animate();
+  });
 }
 
-function animateNecromancerBoneShield(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
-  const { attack, character } = data;
-  if (character.sprite.currentAnimation != attack!.name) { character.sprite.setAnimation(attack!.name); }
-  return false;
+function animateNecromancerBoneShield(data: Attack, targetTeam: Target): Promise<void> {
+  const { character, attack, target } = data;
+  const frames = character.sprite.animations[attack.name].frames;
+
+  return new Promise((res) => {
+    character.sprite.setAnimation(attack.name);
+    const animate = () => {
+      const frame = character.sprite.frame;
+      if (frame + 1 >= frames) {
+        character.sprite.setAnimation("idle");
+        res();
+        return
+      }
+
+      requestAnimationFrame(() => { animate() });
+    };
+
+    animate();
+  });
 }
 
 class Sprite {
@@ -1139,12 +1164,12 @@ class DisplayDriver {
     this.drawUI(this.ui.curMode.peek()!);
   }
 
-  drawDebug() {
+  private drawDebug() {
     this.ctx.fillStyle = 'red';
     this.ctx.fillRect(this.cX(0), this.cY(0), this.cX(this.ctxWidth), this.cY(this.ctxHeight));
   }
 
-  drawStage(): void {
+  private drawStage(): void {
     // this is the background
     this.stage.layers.forEach((layer) => {
       this.ctx.drawImage(layer, this.cX(0), this.cY(0), this.ctxWidth, this.ctxHeight);
@@ -1190,7 +1215,7 @@ class DisplayDriver {
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
   }
 
-  drawTeam(): void {
+  private drawTeam(): void {
     this.gameState.team.forEach((character) => {
       const x = character.position.x;
       const y = character.position.y;
@@ -1200,7 +1225,7 @@ class DisplayDriver {
     });
   }
 
-  drawEnemyTeam(): void {
+  private drawEnemyTeam(): void {
     this.gameState.enemyTeam.forEach((character) => {
       const x = character.position.x;
       const y = character.position.y;
@@ -1593,7 +1618,7 @@ function constructGameScreen(ui: UI): void {
       targetMap[attack.target].forEach((target) => {
         // dont change the order of these events. it matters
         // what are you...a permutation?!?!
-        const data = { characterId: character.id, characterTeamId: teamId, targetId: target.id, targetTeamId: attack.target === Target.OwnTeam ? teamId : enemyTeamId, attack: attack };
+        const data = { characterId: character.id, teamId: teamId, targetId: target.id, targetTeamId: attack.target === Target.OwnTeam ? teamId : enemyTeamId, attack: attack };
         ui.button({ ...defaultButtonOpts, backgroundColor: targetColorMap[attack.target] }, target.name, [ConstructEvent(EventType.UI_UNTOGGLE_ID, "characterScreen"), ConstructEvent(EventType.QUEATTACK, data)]);
       });
 
