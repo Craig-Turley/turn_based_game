@@ -65,7 +65,6 @@ type Move = {
   specialCondition?: SpecialCondition, // any conditions being applied
 }
 
-
 type Attack = {
   characterId: CharacterId, // character attacking 
   targetId: CharacterId, // the reciever of the attack
@@ -145,6 +144,7 @@ class GameState {
   results: Attack[] = [];
   curResult: AttackContext | null = null;
   curResultIdx: number | null = null;
+  animating: boolean = false;
 
   constructor(ctxWidth: number, ctxHeight: number, eventBus: EventBus) {
     this.team = this.constructTeam(ctxWidth, ctxHeight);
@@ -266,6 +266,10 @@ class GameState {
     this.curResult = getAttackContext(this, this.results[this.curResultIdx]);
   }
 
+  queueResults(attacks: Attack[]) {
+    this.results.push(...attacks);
+  }
+
   getCurrentResult(): AttackContext {
     return getAttackContext(this, this.results[this.curResultIdx!]);
   }
@@ -279,7 +283,7 @@ class GameState {
 }
 
 interface CommunicationProtocolDriver {
-  sendTurn(attacks: Attack[]): Promise<void>,
+  sendTurn(attacks: Attack[]): void,
   connect(): Promise<void>,
 }
 
@@ -367,31 +371,43 @@ class Game {
         break;
       case EventType.QUEATTACK:
         if (this.gameState.queAttack(event.data)) {
-          this.uiState = UIMode.OpponentTurn;
-          this.ui.setMode(this.uiState);
           this.update(ConstructEvent(EventType.OUTGOINGATTACK, this.gameState.attackQueue));
         }
         break;
       case EventType.INCOMINGATTACK:
-        this.handleAttack(event);
-        this.uiState = UIMode.InGame;
-        this.ui.setMode(this.uiState);
-        break;
-      case EventType.OUTGOINGATTACK:
+        console.log(event.data);
+        if (this.gameState.animating) {
+          this.gameState.queueResults(event.data);
+          break;
+        }
+        this.gameState.animating = true;
         this.gameState.setResults(event.data);
         this.animator.sendResult(this.gameState.getCurrentResult());
         break;
+      case EventType.OUTGOINGATTACK:
+        this.uiState = UIMode.OpponentTurn;
+        this.ui.setMode(this.uiState);
+        if (this.gameState.animating) {
+          this.gameState.queueResults(event.data);
+          break;
+        }
+        this.gameState.animating = true;
+        this.gameState.setResults(event.data);
+        this.animator.sendResult(this.gameState.getCurrentResult());
+        this.commsDriver.sendTurn(event.data);
+        break;
       case EventType.ANIMATION_FINISH:
-        // this.gameState.handleAttackResults(this.gameState.getCurrentResult());
+        this.gameState.handleAttackResults(this.gameState.getCurrentResult());
         const nextResult = this.gameState.getNextResult();
         if (!nextResult) {
+          this.gameState.animating = false;
           console.log("End turn");
           break;
         };
         this.animator.sendResult(nextResult!);
         break;
       case EventType.CHARACTER_DEATH:
-        this.handleDeath(event);
+        // this.handleDeath(event);
         break;
       case EventType.GAME_WIN:
         constructNotifierModal(this.ui, UIMode.GameWin, "You Win!!!");
@@ -408,10 +424,11 @@ class Game {
 
   handleAttack(event: event) {
     this.gameState.flushQueue();
-    // if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
+    if (event.event == EventType.OUTGOINGATTACK) { this.commsDriver.sendTurn(this.gameState.attackQueue); }
   }
 
   handleDeath(event: event) {
+    // this.animator.sendResult()
     this.gameState.handleDeathResult(event);
   }
 }
@@ -529,11 +546,11 @@ class Animator {
   }
 
   animateSequence(character: Character, animation: AnimatorInformation, step: number) {
+    console.log(character.name, animation.name);
     const sequence = this.animations[animation.name];
     if (!sequence) {
       this.characters.set(character, null);
       character.sprite.setAnimation("idle");
-      this.characters.set(character, null);
       this.bus.send(ConstructEvent(EventType.ANIMATION_FINISH, {}))
       return;
     }
@@ -552,6 +569,7 @@ class Animator {
           character.sprite.setAnimation("idle");
           this.characters.set(character, null);
           this.bus.send(ConstructEvent(EventType.ANIMATION_FINISH, {}))
+          console.log(this.animations);
         }
       } else { animationData.curFrame--; }
     }
@@ -613,30 +631,27 @@ class NOPCommunicationsDriver {
     })
   }
 
-  sendTurn(attacks: Attack[]): Promise<void> {
-    return new Promise((res) => {
-      const data: Attack[] = [];
+  sendTurn(attacks: Attack[]): void {
+    const data: Attack[] = [];
 
-      this.team.forEach((character) => {
-        if (character.health != 0) {
-          const attack = character.attack[Math.floor(Math.random() * character.attack.length)];
-          let targetId;
-          if (attack.target == Target.OwnTeam) {
-            targetId = this.team[Math.floor(Math.random() * this.team.length)].id;
-          } else {
-            targetId = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)].id;
-          }
-          data.push({ characterId: character.id, targetId: targetId, characterTeamId: this.teamId, targetTeamId: attack.target === Target.OwnTeam ? this.teamId : TeamId.TeamOne, attack: attack });
+    this.team.forEach((character) => {
+      if (character.health != 0) {
+        const attack = character.attack[Math.floor(Math.random() * character.attack.length)];
+        let targetId;
+        if (attack.target == Target.OwnTeam) {
+          targetId = this.team[Math.floor(Math.random() * this.team.length)].id;
+        } else {
+          targetId = this.enemyTeam[Math.floor(Math.random() * this.enemyTeam.length)].id;
         }
-      });
-
-      // to prevent the UI from updating if we already lost
-      if (data.length != 0) {
-        this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, data));
+        data.push({ characterId: character.id, targetId: targetId, characterTeamId: this.teamId, targetTeamId: attack.target === Target.OwnTeam ? this.teamId : TeamId.TeamOne, attack: attack });
       }
-
-      res();
     });
+
+    // to prevent the UI from updating if we already lost
+    if (data.length != 0) {
+      this.eventBus.send(ConstructEvent(EventType.INCOMINGATTACK, data));
+    }
+
   }
 
   constructEnemyTeam(ctxWidth: number, ctxHeight: number): Character[] {
@@ -878,9 +893,18 @@ function animateKnightWalkTarget(data: AttackContext, step: number, frame: numbe
 }
 
 function animateKnightSlash(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
-  const { character } = data;
-  if (character.sprite.currentAnimation != "Slash") { character.sprite.setAnimation("Slash"); }
+  const { character, attack, target } = data;
+
+  if (frame == 0) {
+    target!.sprite.setAnimation("idle");
+    return true;
+  }
+
+  if (character.sprite.currentAnimation != attack!.name) {
+    character.sprite.setAnimation(attack!.name);
+    target!.sprite.setAnimation("damage");
+  }
+
   return false;
 }
 
@@ -927,12 +951,13 @@ function animateWitchWalkTarget(data: AttackContext, step: number, frame: number
 }
 
 function animateWitchArcaneBurst(data: AttackContext, step: number, frame: number): boolean {
-  const { character, attack, teamId } = data;
+  const { character, attack, target, teamId } = data;
   const prevAnimationWidth = character.sprite.animations[character.sprite.currentAnimation].size.x;
   let rawOffset = Math.floor((character.sprite.animations[attack!.name].size.x / 2) - (prevAnimationWidth / 2));
   const offset = teamId == character.teamId ? rawOffset : rawOffset * -1;
 
   if (frame == 0) {
+    target!.sprite.setAnimation("idle");
     character.position.x -= offset;
     return true;
   }
@@ -940,6 +965,7 @@ function animateWitchArcaneBurst(data: AttackContext, step: number, frame: numbe
   if (character.sprite.currentAnimation != attack!.name) {
     character.position.x += offset;
     character.sprite.setAnimation(attack!.name);
+    target!.sprite.setAnimation("damage");
   }
 
   return false
@@ -972,9 +998,18 @@ function animateWitchWalkBack(data: AttackContext, step: number, frame: number):
 }
 
 function animateNecromancerDarkPulse(data: AttackContext, step: number, frame: number): boolean {
-  if (frame == 0) { return true; }
-  const { attack, character } = data;
-  if (character.sprite.currentAnimation != attack!.name) { character.sprite.setAnimation(attack!.name); }
+  const { attack, character, target } = data;
+
+  if (frame == 0) {
+    target!.sprite.setAnimation("idle");
+    return true;
+  }
+
+  if (character.sprite.currentAnimation != attack!.name) {
+    target!.sprite.setAnimation("damage");
+    character.sprite.setAnimation(attack!.name);
+  }
+
   return false;
 }
 
